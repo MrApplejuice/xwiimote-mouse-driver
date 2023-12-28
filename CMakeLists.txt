@@ -20,3 +20,12 @@ target_link_libraries(mouse-test PkgConfig::evdev PkgConfig::xwiimote)
 
 add_executable(xwiimote-test src/xwiimote-test.cpp)
 target_link_libraries(xwiimote-test PkgConfig::evdev PkgConfig::xwiimote)
+
+# Actual mouse driver
+add_executable(
+    xwiimote-mouse-driver 
+        src/drivermain.cpp
+        src/base.hpp
+)
+target_link_libraries(xwiimote-mouse-driver  PkgConfig::evdev PkgConfig::xwiimote)
+add_compile_options(xwiimote-mouse-driver  -Wall)

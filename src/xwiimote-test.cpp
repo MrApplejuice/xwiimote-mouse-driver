@@ -3,48 +3,11 @@
 
 #include <xwiimote.h>
 
-template <typename T>
-struct UnRefFunc {
-    typedef void (*Func)(T);
-};
-
-
-template <typename T>
-struct RefcountRef {
-    T ref;
-
-    typename UnRefFunc<T>::Func refFunc;
-    typename UnRefFunc<T>::Func unrefFunc;
-
-    RefcountRef<T> operator=(const RefcountRef<T>& other) {
-        unrefFunc(ref);
-        ref = other.ref;
-        refFunc = other.refFunc;
-        unrefFunc = other.unrefFunc;
-        refFunc(ref);
-    }
-
-    RefcountRef(const RefcountRef<T>& other) {
-        ref = other.ref;
-        refFunc = other.refFunc;
-        unrefFunc = other.unrefFunc;
-        refFunc(ref);
-    }
-
-    RefcountRef(const T& ref, typename UnRefFunc<T>::Func refFunc, typename UnRefFunc<T>::Func unrefFunc) {
-        this->ref = ref;
-        this->refFunc = refFunc;
-        this->unrefFunc = unrefFunc;
-    }
-
-    ~RefcountRef() {
-        unrefFunc(ref);
-    }
-};
+#include "base.hpp"
 
 int main() {
     try {
-        RefcountRef<xwii_monitor*> mon(
+        XwiiRefcountRef<xwii_monitor*> mon(
             xwii_monitor_new(true, false),
             &xwii_monitor_ref,
             &xwii_monitor_unref
@@ -60,7 +23,7 @@ int main() {
                 continue;
             }
             
-            RefcountRef<xwii_iface*> dev(
+            XwiiRefcountRef<xwii_iface*> dev(
                 rawdev,
                 &xwii_iface_ref,
                 &xwii_iface_unref
