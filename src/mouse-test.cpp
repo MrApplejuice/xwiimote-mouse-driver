@@ -12,12 +12,12 @@ int main() {
         std::cout << "Press enter to move mouse" << std::endl;
         std::getline(std::cin, s);
 
-        mouse.moveMouse(10, 500);
+        mouse.move(10, 500);
 
         std::cout << "Press enter to move mouse again!" << std::endl;
         std::getline(std::cin, s);
 
-        mouse.moveMouse(500, 50);
+        mouse.move(500, 50);
 
         std::cout << "Press enter to perform a right-click!" << std::endl;
         std::getline(std::cin, s);
