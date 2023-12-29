@@ -5,36 +5,25 @@
 
 int main() {
     try {
-        VirtualMouse mouse;
+        VirtualMouse mouse(1000);
 
         std::string s;
 
         std::cout << "Press enter to move mouse" << std::endl;
         std::getline(std::cin, s);
 
-        libevdev_uinput_write_event(mouse.uinput, EV_KEY, BTN_TOOL_MOUSE, 1);
-        libevdev_uinput_write_event(mouse.uinput, EV_ABS, ABS_X, 10);
-        libevdev_uinput_write_event(mouse.uinput, EV_ABS, ABS_Y, 500);
-        libevdev_uinput_write_event(mouse.uinput, EV_SYN, SYN_REPORT, 0);
+        mouse.moveMouse(10, 500);
 
         std::cout << "Press enter to move mouse again!" << std::endl;
         std::getline(std::cin, s);
 
-        libevdev_uinput_write_event(mouse.uinput, EV_KEY, BTN_TOOL_MOUSE, 1);
-        libevdev_uinput_write_event(mouse.uinput, EV_ABS, ABS_X, 500);
-        libevdev_uinput_write_event(mouse.uinput, EV_ABS, ABS_Y, 50);
-        libevdev_uinput_write_event(mouse.uinput, EV_SYN, SYN_REPORT, 0);
+        mouse.moveMouse(500, 50);
 
         std::cout << "Press enter to perform a right-click!" << std::endl;
         std::getline(std::cin, s);
 
-        libevdev_uinput_write_event(mouse.uinput, EV_KEY, BTN_TOOL_MOUSE, 1);
-        libevdev_uinput_write_event(mouse.uinput, EV_KEY, BTN_RIGHT, 1);
-        libevdev_uinput_write_event(mouse.uinput, EV_SYN, SYN_REPORT, 0);
-
-        libevdev_uinput_write_event(mouse.uinput, EV_KEY, BTN_TOOL_MOUSE, 1);
-        libevdev_uinput_write_event(mouse.uinput, EV_KEY, BTN_RIGHT, 0);
-        libevdev_uinput_write_event(mouse.uinput, EV_SYN, SYN_REPORT, 0);
+        mouse.setButtonPressed(2, true);
+        mouse.setButtonPressed(2, false);
 
         std::cout << "Press enter to quit" << std::endl;
         std::getline(std::cin, s);
