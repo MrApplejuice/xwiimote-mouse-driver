@@ -27,5 +27,9 @@ add_executable(
         src/drivermain.cpp
         src/base.hpp
 )
-target_link_libraries(xwiimote-mouse-driver  PkgConfig::evdev PkgConfig::xwiimote)
-add_compile_options(xwiimote-mouse-driver  -Wall)
+target_link_libraries(
+    xwiimote-mouse-driver 
+        PkgConfig::evdev 
+        PkgConfig::xwiimote
+)
+add_compile_options(xwiimote-mouse-driver -Wall)
