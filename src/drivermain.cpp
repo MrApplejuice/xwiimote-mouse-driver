@@ -12,6 +12,11 @@
 
 #include "base.hpp"
 
+std::ostream& operator<<(std::ostream& out, const xwii_event_abs& abs) {
+    out << "x:" << abs.x << " y:" << abs.y;
+    return out;
+}
+
 class DevFailed : public std::exception {};
 class DevInitFailed : public DevFailed {};
 
@@ -28,6 +33,7 @@ private:
     }
 public:
     int accelX, accelY, accelZ;
+    xwii_event_abs irdata[4];
 
     Xwiimote(std::string devName) {
         xwii_iface* rawdev;
@@ -39,8 +45,13 @@ public:
             &xwii_iface_ref,
             &xwii_iface_unref
         );
-        xwii_iface_open(rawdev, XWII_IFACE_ACCEL);
+        xwii_iface_open(rawdev, XWII_IFACE_CORE | XWII_IFACE_ACCEL | XWII_IFACE_IR);
         accelX = accelY = accelZ = 0;
+        
+        irdata[0].x = irdata[0].y = irdata[0].z = 1023;
+        irdata[1].x = irdata[1].y = irdata[1].z = 1023;
+        irdata[2].x = irdata[2].y = irdata[2].z = 1023;
+        irdata[3].x = irdata[3].y = irdata[3].z = 1023;
     }
 
     void poll() {
@@ -53,6 +64,8 @@ public:
             }
             if (ev.type == XWII_EVENT_ACCEL) {
                 processAccel(ev);
+            } else if (ev.type == XWII_EVENT_IR) {
+                std::copy(ev.v.abs, ev.v.abs + 4, irdata);
             }
         }
         if (err != -EAGAIN) {
@@ -118,6 +131,10 @@ int main() {
             Xwiimote::Ptr dev = monitor.get_device(i);
             dev->poll();
             std::cout << "  accel = " << dev->accelX << " " << dev->accelY << " " << dev->accelZ << std::endl;
+            std::cout << "  ir1 = " << dev->irdata[0] << std::endl;
+            std::cout << "  ir2 = " << dev->irdata[1] << std::endl;
+            std::cout << "  ir3 = " << dev->irdata[2] << std::endl;
+            std::cout << "  ir4 = " << dev->irdata[3] << std::endl;
         }
     }
 
