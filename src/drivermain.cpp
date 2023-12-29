@@ -119,8 +119,6 @@ public:
 int main() {
     XwiimoteMonitor monitor;
 
-
-
     while (true) {
         monitor.poll();
         std::cout << "Number of wii devices: " << monitor.count() << std::endl;

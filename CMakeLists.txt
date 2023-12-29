@@ -15,7 +15,7 @@ pkg_search_module(
 )
 
 # Experimental test applications
-add_executable(mouse-test src/mouse-test.cpp)
+add_executable(mouse-test src/mouse-test.cpp src/virtualmouse.hpp)
 target_link_libraries(mouse-test PkgConfig::evdev PkgConfig::xwiimote)
 
 add_executable(xwiimote-test src/xwiimote-test.cpp)
@@ -26,6 +26,7 @@ add_executable(
     xwiimote-mouse-driver 
         src/drivermain.cpp
         src/base.hpp
+        src/virtualmouse.hpp
 )
 target_link_libraries(
     xwiimote-mouse-driver 
