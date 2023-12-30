@@ -14,12 +14,14 @@ pkg_search_module(
     libxwiimote
 )
 
-# Experimental test applications
+# test applications
 add_executable(mouse-test src/mouse-test.cpp src/virtualmouse.hpp)
 target_link_libraries(mouse-test PkgConfig::evdev PkgConfig::xwiimote)
 
 add_executable(xwiimote-test src/xwiimote-test.cpp)
 target_link_libraries(xwiimote-test PkgConfig::evdev PkgConfig::xwiimote)
+
+add_executable(test-maths src/testmaths.cpp src/intlinalg.hpp)
 
 # Actual mouse driver
 add_executable(
@@ -27,6 +29,7 @@ add_executable(
         src/drivermain.cpp
         src/base.hpp
         src/virtualmouse.hpp
+        src/intlinalg.hpp
 )
 target_link_libraries(
     xwiimote-mouse-driver 
