@@ -5,17 +5,17 @@
 #include <iostream>
 #include <algorithm>
 
-static int isqrt(int x) {
+static int64_t isqrt(int64_t x) {
     if (x <= 1) {
         return x;
     }
 
-    int start = 1;
-    int end = x / 2;
-    int result = start;
+    int64_t start = 1;
+    int64_t end = x / 2;
+    int64_t result = start;
     while (start <= end) {
-        const int mid = (start + end) / 2;
-        const int mid2 = mid * mid;
+        const int64_t mid = (start + end) / 2;
+        const int64_t mid2 = mid * mid;
 
         if (mid2 == x) {
             return mid;
@@ -36,30 +36,115 @@ static int isqrt(int x) {
     return result;
 }
 
+struct Scalar {
+    int64_t value;
+    int64_t divisor;
+
+    bool operator<(const Scalar& other) const {
+        if (divisor >= other.divisor) {
+            return value < other.redivide(divisor).value;
+        } else {
+            return other < *this;
+        }
+    }
+
+    Scalar operator-() const {
+        return Scalar(-value, divisor);
+    }
+
+    Scalar operator+(const Scalar& o) const {
+        if (divisor < o.divisor) {
+            return o + *this;
+        }
+
+        return Scalar(
+            value * o.divisor / divisor + o.value,
+            o.divisor
+        );
+    }
+
+    Scalar operator-(const Scalar& o) const {
+        return (-o) + *this;
+    }
+
+    Scalar operator*(const Scalar& o) const {
+        return Scalar(
+            value * o.value,
+            divisor * o.divisor
+        );
+    }
+
+    Scalar operator/(const Scalar& f) const {
+        if (f < 0) {
+            return Scalar(value * -f.divisor, divisor * -f.value);
+        } else {
+            return Scalar(value * f.divisor, divisor * f.value);
+        }
+    }
+
+    Scalar redivide(int64_t newDivisor) const {
+        return Scalar(
+            value * newDivisor / divisor,
+            abs(newDivisor)
+        );
+    }
+
+    Scalar undivide() const {
+        return redivide(1L);
+    }
+
+    Scalar& operator=(const Scalar& other) {
+        value = other.value;
+        divisor = other.divisor;
+        return *this;
+    }
+
+    Scalar sqrt(int64_t extraPrec) const {
+        extraPrec *= extraPrec;
+        return Scalar(
+            isqrt(value * extraPrec), 
+            isqrt(divisor * extraPrec)
+        );
+    }
+
+    Scalar() {
+        value = 0L;
+        divisor = 1L;
+    }
+
+    Scalar(const Scalar& other) {
+        *this = other;
+    }
+
+    Scalar(int64_t _value) {
+        value = _value;
+        divisor = 1L;
+    }
+
+    Scalar(int64_t _value, int64_t _divisor) {
+        value = _value;
+        divisor = _divisor;
+    }
+};
+
+
 struct Vector3 {
-    int64_t values[3];
-    int64_t base;
-    int64_t cachedLen;
+    Scalar values[3];
+    Scalar cachedLen;
 
     Vector3 operator-() const {
         return Vector3(
             -values[0],
             -values[1],
-            -values[2],
-            base
+            -values[2]
         );
     }
 
     Vector3 operator+(const Vector3& o) const {
-        if (base < o.base) {
-            return o + *this;
-        }
-
         return Vector3(
-            values[0] * o.base / base + o.values[0],
-            values[1] * o.base / base + o.values[1],
-            values[2] * o.base / base + o.values[2],
-            o.base
+            values[0] + o.values[0],
+            values[1] + o.values[1],
+            values[2] + o.values[2]
         );
     }
 
@@ -68,62 +153,63 @@ struct Vector3 {
     }
 
     Vector3 operator*(int64_t f) const {
-        return Vector3(values[0] * f, values[1] * f, values[2] * f, base);
+        return Vector3(values[0] * f, values[1] * f, values[2] * f);
+    }
+
+    Vector3 operator*(const Scalar& f) const {
+        return Vector3(values[0] * f, values[1] * f, values[2] * f);
     }
 
     Vector3 operator*(const Vector3& o) const {
         return Vector3(
             values[0] * o.values[0],
             values[1] * o.values[1],
-            values[2] * o.values[2],
-            base * o.base
+            values[2] * o.values[2]
         );
     }
 
     Vector3 operator/(int64_t f) const {
-        if (f < 0) {
-            return -(*this) / -f;
-        }
-        return Vector3(values[0], values[1], values[2], base * f);
+        return Vector3(values[0] / f, values[1] / f, values[2] / f);
     }
 
-    Vector3 rebase(int64_t newBase) const {
+    Vector3 operator/(const Scalar& f) const {
+        return Vector3(values[0] / f, values[1] / f, values[2] / f);
+    }
+
+    Vector3 redivide(int64_t newDivisor) const {
         return Vector3(
-            values[0] * newBase / base,
-            values[1] * newBase / base,
-            values[2] * newBase / base,
-            abs(newBase)
+            values[0].redivide(newDivisor),
+            values[1].redivide(newDivisor),
+            values[2].redivide(newDivisor)
         );
     }
 
-    Vector3 unbase() const {
-        return rebase(1L);
+    Vector3 undivide() const {
+        return redivide(1L);
     }
 
-    int64_t len() {
+    Scalar len() {
         if (cachedLen < 0) {
-            cachedLen = isqrt(len2());
+            cachedLen = dot(*this).sqrt(100);
         }
         return cachedLen;
     }
 
-    int64_t len2() {
-        Vector3 t = (*this) * (*this);
-        return (t.values[0] + t.values[1] + t.values[2]) / t.base;
+    Scalar dot(const Vector3& other) {
+        Vector3 t = (*this) * other;
+        return t.values[0] + t.values[1] + t.values[2];
     }
 
     Vector3& operator=(const Vector3& other) {
         values[0] = other.values[0];
         values[1] = other.values[1];
         values[2] = other.values[2];
-        base = other.base;
         cachedLen = other.cachedLen;
         return *this;
     }
 
     Vector3() {
         values[0] = values[1] = values[2] = 0L;
-        base = 1;
         cachedLen = 0;
     }
 
@@ -131,24 +217,27 @@ struct Vector3 {
         *this = other;
     }
 
-    Vector3(int64_t _base) {
-        values[0] = values[1] = values[2] = 0L;
-        base = _base;
-        cachedLen = 0;
+    Vector3(int64_t x, int64_t y, int64_t z, int64_t _divisor) {
+        values[0] = Scalar(x, _divisor);
+        values[1] = Scalar(y, _divisor);
+        values[2] = Scalar(z, _divisor);
+        cachedLen = -1;
     }
 
-    Vector3(int64_t x, int64_t y, int64_t z, int64_t _base) {
+    Vector3(const Scalar& x, const Scalar& y, const Scalar& z) {
         values[0] = x;
         values[1] = y;
         values[2] = z;
-        base = _base;
         cachedLen = -1;
     }
 };
 
-std::ostream& operator<<(std::ostream& out, const Vector3& v) {
-    out << "Vector3(x=" << v.values[0] << "/" << v.base 
-        << " y=" << v.values[1] << "/" << v.base 
-        << " z=" << v.values[2] << "/" << v.base << ")";
+static std::ostream& operator<<(std::ostream& out, const Scalar& s) {
+    out << s.value << "/" << s.divisor;
+    return out;
+}
+
+static std::ostream& operator<<(std::ostream& out, const Vector3& v) {
+    out << "Vector3(x=" << v.values[0] << " y=" << v.values[1] << " z=" << v.values[2] << ")";
     return out;
 }
