@@ -11,6 +11,8 @@
 #include <xwiimote.h>
 
 #include "base.hpp"
+#include "intlinalg.hpp"
+#include "virtualmouse.hpp"
 
 std::ostream& operator<<(std::ostream& out, const xwii_event_abs& abs) {
     out << "x:" << abs.x << " y:" << abs.y;
@@ -116,26 +118,58 @@ public:
     }
 };
 
+constexpr int64_t clamp(int64_t v, int64_t min, int64_t max) {
+    return (v < min) ? min : ((v > max) ? max : v);
+}
+
+class WiiMouse {
+private:
+    Xwiimote::Ptr wiimote;
+    VirtualMouse vmouse;
+
+    std::chrono::time_point<std::chrono::steady_clock> lastupdate;
+public:
+    void process() {
+        std::chrono::time_point<std::chrono::steady_clock> now = 
+            std::chrono::steady_clock::now();
+
+        wiimote->poll();
+
+        Vector3 accelVector = Vector3(wiimote->accelX, wiimote->accelY, wiimote->accelZ);
+        accelVector = accelVector / accelVector.len();
+        accelVector.redivide(10000);
+
+        int x5k = clamp(accelVector.values[0].value, -5000, 5000);
+        int y5k = clamp(accelVector.values[1].value, -5000, 5000);
+
+        vmouse.move(x5k + 5000, y5k + 5000);
+
+        lastupdate = now;
+    }
+
+    WiiMouse(Xwiimote::Ptr wiimote) : wiimote(wiimote), vmouse(10001) {
+        lastupdate = std::chrono::steady_clock::now();
+    }
+};
+
 int main() {
     XwiimoteMonitor monitor;
 
-    while (true) {
-        monitor.poll();
-        std::cout << "Number of wii devices: " << monitor.count() << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-        for (int i = 0; i < monitor.count(); i++) {
-            std::cout << "Dev " << i + 1 << std::endl;
-            Xwiimote::Ptr dev = monitor.get_device(i);
-            dev->poll();
-            std::cout << "  accel = " << dev->accelX << " " << dev->accelY << " " << dev->accelZ << std::endl;
-            std::cout << "  ir1 = " << dev->irdata[0] << std::endl;
-            std::cout << "  ir2 = " << dev->irdata[1] << std::endl;
-            std::cout << "  ir3 = " << dev->irdata[2] << std::endl;
-            std::cout << "  ir4 = " << dev->irdata[3] << std::endl;
+    monitor.poll();
+    if (monitor.count() <= 0) {
+        std::cout << "No Wiimote found. Please pair a new Wiimote now." << std::endl;
+        while (monitor.count() <= 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            monitor.poll();
         }
-    }
+    } 
 
+    std::cout << "Mouse driver started!" << std::endl;
+    WiiMouse wmouse(monitor.get_device(0));
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        wmouse.process();
+    }
 
     return 0;
 }
