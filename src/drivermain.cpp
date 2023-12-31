@@ -127,6 +127,8 @@ private:
     Xwiimote::Ptr wiimote;
     VirtualMouse vmouse;
 
+    Vector3 smoothCoord;
+
     std::chrono::time_point<std::chrono::steady_clock> lastupdate;
 public:
     void process() {
@@ -139,10 +141,23 @@ public:
         accelVector = accelVector / accelVector.len();
         accelVector.redivide(10000);
 
-        int x5k = clamp(accelVector.values[0].value, -5000, 5000);
-        int y5k = clamp(accelVector.values[1].value, -5000, 5000);
+        Vector3 newCoord(
+            clamp(accelVector.values[0].value, -5000, 5000), 
+            clamp(accelVector.values[1].value, -5000, 5000), 
+            0
+        );
 
-        vmouse.move(x5k + 5000, y5k + 5000);
+        if (smoothCoord.len().value == 0L) {
+            smoothCoord = newCoord.redivide(100);
+        } else {
+            smoothCoord = (
+                smoothCoord * Scalar(90, 100) + 
+                newCoord * Scalar(10, 100)
+            ).redivide(100);
+        }
+
+        Vector3 c = smoothCoord.redivide(1);
+        vmouse.move(c.values[0].value + 5000, c.values[1].value + 5000);
 
         lastupdate = now;
     }
