@@ -4,6 +4,9 @@
 
 #include <iostream>
 #include <algorithm>
+#include <exception>
+
+struct DivisionByZeroError : std::exception {};
 
 static int64_t isqrt(int64_t x) {
     if (x <= 1) {
@@ -45,6 +48,22 @@ struct Scalar {
             return value < other.redivide(divisor).value;
         } else {
             return other < *this;
+        }
+    }
+
+    bool operator>(const Scalar& other) const {
+        if (divisor >= other.divisor) {
+            return value > other.redivide(divisor).value;
+        } else {
+            return other > *this;
+        }
+    }
+
+    bool operator==(const Scalar& other) const {
+        if (divisor >= other.divisor) {
+            return value == other.redivide(divisor).value;
+        } else {
+            return other == *this;
         }
     }
 
@@ -169,10 +188,16 @@ struct Vector3 {
     }
 
     Vector3 operator/(int64_t f) const {
+        if (f == 0) {
+            throw DivisionByZeroError();
+        }
         return Vector3(values[0] / f, values[1] / f, values[2] / f);
     }
 
     Vector3 operator/(const Scalar& f) const {
+        if (f == 0) {
+            throw DivisionByZeroError();
+        }
         return Vector3(values[0] / f, values[1] / f, values[2] / f);
     }
 

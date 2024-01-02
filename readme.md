@@ -16,6 +16,7 @@ More evdev documents:
 - kernel events: https://www.kernel.org/doc/html/v4.17/input/event-codes.html
 - multitouch: https://www.kernel.org/doc/html/latest/input/multi-touch-protocol.html
 - python demo project: https://github.com/alex-s-v/10moons-driver
+- Someone wrote an audio driver in C#: https://github.com/trigger-segfault/WiimoteLib.Net/tree/master
 
 # Build requirements
 

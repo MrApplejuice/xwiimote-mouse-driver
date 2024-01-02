@@ -8,11 +8,14 @@
 #include <memory>
 #include <exception>
 
+#include <csignal>
+
 #include <xwiimote.h>
 
 #include "base.hpp"
 #include "intlinalg.hpp"
 #include "virtualmouse.hpp"
+#include "controlsocket.hpp"
 
 std::ostream& operator<<(std::ostream& out, const xwii_event_abs& abs) {
     out << "x:" << abs.x << " y:" << abs.y;
@@ -138,26 +141,35 @@ public:
         wiimote->poll();
 
         Vector3 accelVector = Vector3(wiimote->accelX, wiimote->accelY, wiimote->accelZ);
-        accelVector = accelVector / accelVector.len();
-        accelVector.redivide(10000);
+        if (accelVector.len() > 0) {
+            accelVector = accelVector / accelVector.len();
 
-        Vector3 newCoord(
-            clamp(accelVector.values[0].value, -5000, 5000), 
-            clamp(accelVector.values[1].value, -5000, 5000), 
-            0
-        );
+            accelVector.redivide(10000);
 
-        if (smoothCoord.len().value == 0L) {
-            smoothCoord = newCoord.redivide(100);
-        } else {
-            smoothCoord = (
-                smoothCoord * Scalar(90, 100) + 
-                newCoord * Scalar(10, 100)
-            ).redivide(100);
+            Vector3 newCoord(
+                clamp(accelVector.values[0].value, -5000, 5000), 
+                clamp(accelVector.values[1].value, -5000, 5000), 
+                0
+            );
+
+            if (smoothCoord.len().value == 0L) {
+                smoothCoord = newCoord.redivide(100);
+            } else {
+                smoothCoord = (
+                    smoothCoord * Scalar(90, 100) + 
+                    newCoord * Scalar(10, 100)
+                ).redivide(100);
+            }
+
+            Vector3 c = smoothCoord.redivide(1);
+            vmouse.move(c.values[0].value + 5000, c.values[1].value + 5000);
         }
 
-        Vector3 c = smoothCoord.redivide(1);
-        vmouse.move(c.values[0].value + 5000, c.values[1].value + 5000);
+        std::cout << "+++++++++++++" << std::endl;
+        std::cout << "v1" << wiimote->irdata[0] << std::endl;
+        std::cout << "v2" << wiimote->irdata[1] << std::endl;
+        std::cout << "v3" << wiimote->irdata[2] << std::endl;
+        std::cout << "v4" << wiimote->irdata[3] << std::endl;
 
         lastupdate = now;
     }
@@ -166,6 +178,12 @@ public:
         lastupdate = std::chrono::steady_clock::now();
     }
 };
+
+bool interuptMainLoop = false;
+
+void signalHandler(int signum) {
+    interuptMainLoop = true;
+}
 
 int main() {
     XwiimoteMonitor monitor;
@@ -179,12 +197,15 @@ int main() {
         }
     } 
 
-    std::cout << "Mouse driver started!" << std::endl;
     WiiMouse wmouse(monitor.get_device(0));
-    while (true) {
+    std::cout << "Mouse driver started!" << std::endl;
+    signal(SIGINT, signalHandler);
+    while (!interuptMainLoop) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         wmouse.process();
     }
+
+    std::cout << "Mouse driver stopped!" << std::endl;
 
     return 0;
 }

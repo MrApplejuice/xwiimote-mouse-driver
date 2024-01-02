@@ -30,6 +30,8 @@ add_executable(
         src/base.hpp
         src/virtualmouse.hpp
         src/intlinalg.hpp
+        src/controlsocket.hpp
+        src/controlsocket.cpp
 )
 target_link_libraries(
     xwiimote-mouse-driver 
