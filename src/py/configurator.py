@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import tkinter as tk
 import socket
 
@@ -5,10 +7,10 @@ import numpy as np
 
 class UnixSocketReader:
     def __init__(self, socket_path, tcl_root, notify_callback):
+        self.poll_interval = 10
+
         self.socket_path = socket_path
         self.root = tcl_root
-        self.timer_id = None
-        self.timer_id = self.root.after(100, self.read_socket)
         self.notify_callback = notify_callback
 
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -17,6 +19,8 @@ class UnixSocketReader:
 
         self.lr_vectors = None
         self.ir_vectors = [None] * 4
+
+        self.timer_id = self.root.after(self.poll_interval, self.read_socket)
 
     def process_message(self, message: str):
         message_parts = message.strip().split(":")
@@ -52,18 +56,37 @@ class UnixSocketReader:
         except IOError as e:
             print(f"Error reading socket: {e}")
         finally:
-            self.timer_id = self.root.after(100, self.read_socket)
+            self.timer_id = self.root.after(self.poll_interval, self.read_socket)
 
     def close(self):
         if self.timer_id is not None:
             self.root.after_cancel(self.timer_id)
         self.sock.close()
 
+def draw_cross(canvas, x, y) -> Tuple[int, int]:
+    return (
+        canvas.create_line(x-10, y, x+10, y, width=2),
+        canvas.create_line(x, y-10, x, y+10, width=2),
+    )
 
+class LRCrosses:
+    def __init__(self, canvas):
+        self.canvas = canvas
+        self.crosses = [None] * 2
 
-def draw_cross(canvas, x, y):
-    canvas.create_line(x-10, y, x+10, y, width=2)  # Horizontal line
-    canvas.create_line(x, y-10, x, y+10, width=2)  # Vertical line
+    def update(self, lr_vectors):
+        for drawelements in self.crosses:
+            if drawelements is not None:
+                for d in drawelements:
+                    self.canvas.delete(d)
+
+        if lr_vectors is None:
+            self.crosses = [None] * 2
+            return
+
+        for i in range(2):
+            x, y = lr_vectors[i] * [self.canvas.winfo_width(), self.canvas.winfo_height()] / 1024
+            self.crosses[i] = draw_cross(self.canvas, x, y)
 
 def get_screen_resolution(root):
     screen_width = root.winfo_screenwidth()
@@ -80,11 +103,6 @@ def main():
     canvas = tk.Canvas(main_frame, width=400, height=400)
     canvas.pack()
 
-    # Draw four crosses
-    draw_cross(canvas, 100, 100)
-    draw_cross(canvas, 300, 100)
-    draw_cross(canvas, 100, 300)
-    draw_cross(canvas, 300, 300)
     canvas.config(bg="gray")
 
     # Add text box
@@ -115,23 +133,26 @@ def main():
 
     root.geometry("400x500")
 
+    crosses = LRCrosses(canvas)
+
     def new_socket_data():
-        if socket.lr_vectors is None:
+        if wiimote.lr_vectors is None:
             canvas.config(bg="red")
             text_box.config(text="Sensor bar not visible")
-        elif socket.lr_vectors[0].tolist() == socket.lr_vectors[1].tolist():
+        elif wiimote.lr_vectors[0].tolist() == wiimote.lr_vectors[1].tolist():
             canvas.config(bg="yellow")
             text_box.config(text="Sensor bar only partially visible")
         else:
             canvas.config(bg="green")
             text_box.config(text="Ready to calibrate")
+        crosses.update(wiimote.lr_vectors)
 
-    socket = UnixSocketReader("/tmp/wiimote-mouse.sock", root, new_socket_data)
+    wiimote = UnixSocketReader("/tmp/wiimote-mouse.sock", root, new_socket_data)
     try:
 
         root.mainloop()
     finally:
-        socket.close()
+        wiimote.close()
 
 
 
