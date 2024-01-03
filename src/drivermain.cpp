@@ -165,11 +165,11 @@ public:
             vmouse.move(c.values[0].value + 5000, c.values[1].value + 5000);
         }
 
-        std::cout << "+++++++++++++" << std::endl;
-        std::cout << "v1" << wiimote->irdata[0] << std::endl;
-        std::cout << "v2" << wiimote->irdata[1] << std::endl;
-        std::cout << "v3" << wiimote->irdata[2] << std::endl;
-        std::cout << "v4" << wiimote->irdata[3] << std::endl;
+        //std::cout << "+++++++++++++" << std::endl;
+        //std::cout << "v1" << wiimote->irdata[0] << std::endl;
+        //std::cout << "v2" << wiimote->irdata[1] << std::endl;
+        //std::cout << "v3" << wiimote->irdata[2] << std::endl;
+        //std::cout << "v4" << wiimote->irdata[3] << std::endl;
 
         lastupdate = now;
     }
@@ -198,6 +198,7 @@ int main() {
     } 
 
     WiiMouse wmouse(monitor.get_device(0));
+    ControlSocket csocket;
     std::cout << "Mouse driver started!" << std::endl;
     signal(SIGINT, signalHandler);
     while (!interuptMainLoop) {
