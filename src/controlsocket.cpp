@@ -1,11 +1,15 @@
 #include "controlsocket.hpp"
 
 #include <iostream>
+#include <exception>
 
 #include <cstdio>
 
 #include <poll.h>
 #include <sys/socket.h>
+
+class SocketFailed : public std::exception {};
+class SocketCreationFailed : public SocketFailed {};
 
 static const std::string SOCKET_ADDR = "/tmp/wiimote-mouse.sock";
 
@@ -14,22 +18,12 @@ void ConnectionHandler :: threadMain() {
 
     struct pollfd polldata;
     polldata.fd = socket.handle();
-    polldata.events = POLLERR | POLLIN | POLLPRI;
+    polldata.events = POLLERR | POLLIN | POLLPRI | POLLHUP;
 
     while (alive) {
         polldata.revents = 0;
         int pollres = poll(&polldata, 1, 500);
-        std::cout << "socket pollres = " << pollres << std::endl;
         if (polldata.revents || pollres) {
-            std::cout << "socket revents = " << polldata.revents << std::endl;
-            std::cout << "socket err = " << socket.last_error_str() << std::endl;
-
-            if (polldata.revents & POLLHUP) {
-                std::cout << "Lost connection!" << std::endl;
-                alive = false;
-                socket.close();
-                continue;
-            }
             if (polldata.revents & POLLIN) {
                 const int readn = socket.read_n(readbuffer, 1024);
                 if (readn < 0) {
@@ -42,6 +36,11 @@ void ConnectionHandler :: threadMain() {
 
                     std::cout << "received: " << readbuffer << std::endl;
                 }
+            }
+            if (polldata.revents & POLLHUP) {
+                alive = false;
+                socket.close();
+                continue;
             }
         }
 
@@ -56,7 +55,11 @@ bool ConnectionHandler :: isAlive() const {
 }
 
 void ConnectionHandler :: sendMessage(const std::string& msg) {
-    
+    int msgLen = msg.length();
+    if (msgLen > 1024) {
+        msgLen = 1024;
+    }
+    socket.write_n(msg.c_str(), msgLen);
 }
 
 void ConnectionHandler :: startShutdown() {
@@ -81,28 +84,44 @@ void ControlSocket :: threadMain() {
     sockpp::socket_t handle = acceptor->handle();
     struct pollfd polldata;
     polldata.fd = handle;
-    polldata.events = POLLERR | POLLIN | POLLPRI;
+    polldata.events = POLLERR | POLLIN | POLLPRI | POLLHUP;
 
     while (alive) {
         polldata.revents = 0;
         int ppollres = poll(&polldata, 1, 50);
-        if (polldata.revents || ppollres) {
-            std::cout << "ppollres = " << ppollres << std::endl;
-            std::cout << "revents = " << polldata.revents << std::endl;
-        }
-
         if (polldata.revents) {
-            while (sockpp::unix_socket sock = acceptor->accept()) {
+            if (sockpp::unix_socket sock = acceptor->accept()) {
                 std::lock_guard<std::mutex> lock(sharedResourceMutex);
 
-                std::cout << "accept" << std::endl;
+                std::vector<ConnectionHandler*> toRemove;
+                for (ConnectionHandler* ht : handlerThreads) {
+                    if (!ht->isAlive()) {
+                        toRemove.push_back(ht);
+                    }
+                }
+                for (ConnectionHandler* ht : toRemove) {
+                    handlerThreads.erase(
+                        std::find(handlerThreads.begin(), handlerThreads.end(), ht)
+                    );
+                    delete ht;
+                }
+
                 handlerThreads.push_back(new ConnectionHandler(sock));
             }
         }
+
     }
 }
 
 void ControlSocket :: processEvents(CommandHandleFunction handler) {
+}
+
+void ControlSocket :: broadcastMessage(const std::string& msg) {
+    std::lock_guard<std::mutex> lock(sharedResourceMutex);
+
+    for (ConnectionHandler* ch : handlerThreads) {
+        ch->sendMessage(msg);
+    }
 }
 
 ControlSocket :: ControlSocket() {
@@ -115,7 +134,7 @@ ControlSocket :: ControlSocket() {
 
     auto res = acceptor->open(sockpp::unix_address(SOCKET_ADDR));
     if (!res) {
-        std::cout << "Nope!" << std::endl;
+        throw SocketCreationFailed();
     }
     mainThread = std::thread(&ControlSocket::threadMain, this);
 }
@@ -127,9 +146,7 @@ ControlSocket :: ~ControlSocket() {
             h->startShutdown();
         }
     }
-
     alive = false;
-    mainThread.join();
 
     {
         std::lock_guard<std::mutex> lock(sharedResourceMutex);
@@ -139,8 +156,11 @@ ControlSocket :: ~ControlSocket() {
         handlerThreads.clear();
     }
 
+    mainThread.join();
+
     if (acceptor) {
         acceptor->close();
     }
+
     std::remove(SOCKET_ADDR.c_str());
 }

@@ -12,8 +12,6 @@
 typedef void (*CommandHandleFunction)(const std::string& command, const std::vector<std::string>& parameters);
 
 class ConnectionHandler {
-public:
-    typedef std::shared_ptr<ConnectionHandler> Ptr;
 private:
     sockpp::unix_socket socket;
     bool alive;
@@ -42,6 +40,7 @@ private:
     void threadMain();
 public:
     void processEvents(CommandHandleFunction handler);
+    void broadcastMessage(const std::string& msg);
 
     ControlSocket();
     ~ControlSocket();

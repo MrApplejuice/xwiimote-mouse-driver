@@ -125,6 +125,16 @@ constexpr int64_t clamp(int64_t v, int64_t min, int64_t max) {
     return (v < min) ? min : ((v > max) ? max : v);
 }
 
+struct IRData {
+    bool valid;
+    Vector3 point;
+};
+
+static const IRData INVALID_IR = {
+    false,
+    Vector3()
+};
+
 class WiiMouse {
 private:
     Xwiimote::Ptr wiimote;
@@ -134,6 +144,16 @@ private:
 
     std::chrono::time_point<std::chrono::steady_clock> lastupdate;
 public:
+    IRData getIrSpot(int i) const {
+        if ((i < 0) || (i >= 4)) {
+            return INVALID_IR;
+        }
+        IRData r;
+        r.point = Vector3(wiimote->irdata[i].x, wiimote->irdata[i].y, 0);
+        r.valid = xwii_event_ir_is_valid(&(wiimote->irdata[i])) && (r.point.len() > 0);
+        return r;
+    }
+
     void process() {
         std::chrono::time_point<std::chrono::steady_clock> now = 
             std::chrono::steady_clock::now();
@@ -201,9 +221,25 @@ int main() {
     ControlSocket csocket;
     std::cout << "Mouse driver started!" << std::endl;
     signal(SIGINT, signalHandler);
+
+    char irMessageBuffer[1024];
     while (!interuptMainLoop) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         wmouse.process();
+
+        for (int i = 0; i < 4; i++) {
+            IRData d = wmouse.getIrSpot(i);
+            snprintf(
+                irMessageBuffer,
+                1024,
+                "ir:%i:%i:%i:%i\n",
+                i,
+                (int) d.valid,
+                (int) d.point.values[0].undivide().value,
+                (int) d.point.values[1].undivide().value
+            );
+            csocket.broadcastMessage(irMessageBuffer);
+        }
     }
 
     std::cout << "Mouse driver stopped!" << std::endl;
