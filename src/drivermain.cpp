@@ -16,110 +16,8 @@
 #include "intlinalg.hpp"
 #include "virtualmouse.hpp"
 #include "controlsocket.hpp"
+#include "device.hpp"
 
-std::ostream& operator<<(std::ostream& out, const xwii_event_abs& abs) {
-    out << "x:" << abs.x << " y:" << abs.y;
-    return out;
-}
-
-class DevFailed : public std::exception {};
-class DevInitFailed : public DevFailed {};
-
-class Xwiimote {
-public:
-    typedef std::shared_ptr<Xwiimote> Ptr;
-private:
-    XwiiRefcountRef<xwii_iface*> dev;
-
-    void processAccel(xwii_event& ev) {
-        accelX = ev.v.abs->x;
-        accelY = ev.v.abs->y;
-        accelZ = ev.v.abs->z;
-    }
-public:
-    int accelX, accelY, accelZ;
-    xwii_event_abs irdata[4];
-
-    Xwiimote(std::string devName) {
-        xwii_iface* rawdev;
-        if (xwii_iface_new(&rawdev, devName.c_str()) < 0) {
-            throw DevInitFailed();
-        }
-        dev = XwiiRefcountRef<xwii_iface*>(
-            rawdev,
-            &xwii_iface_ref,
-            &xwii_iface_unref
-        );
-        xwii_iface_open(rawdev, XWII_IFACE_CORE | XWII_IFACE_ACCEL | XWII_IFACE_IR);
-        accelX = accelY = accelZ = 0;
-        
-        irdata[0].x = irdata[0].y = irdata[0].z = 1023;
-        irdata[1].x = irdata[1].y = irdata[1].z = 1023;
-        irdata[2].x = irdata[2].y = irdata[2].z = 1023;
-        irdata[3].x = irdata[3].y = irdata[3].z = 1023;
-    }
-
-    void poll() {
-        int err;
-        xwii_event ev;
-        while (true) {
-            err = xwii_iface_dispatch(dev.ref, &ev, sizeof(ev));
-            if (err != 0) {
-                break;
-            }
-            if (ev.type == XWII_EVENT_ACCEL) {
-                processAccel(ev);
-            } else if (ev.type == XWII_EVENT_IR) {
-                std::copy(ev.v.abs, ev.v.abs + 4, irdata);
-            }
-        }
-        if (err != -EAGAIN) {
-            throw DevFailed();
-        }
-    }
-};
-
-class XwiimoteMonitor {
-private:
-    XwiiRefcountRef<xwii_monitor*> monitor;
-
-    std::vector<std::string> deviceNames;
-    std::map<std::string, Xwiimote::Ptr> openedDevices;
-public:
-    XwiimoteMonitor() {
-        monitor = XwiiRefcountRef<xwii_monitor*>(
-            xwii_monitor_new(true, false),
-            &xwii_monitor_ref,
-            &xwii_monitor_unref
-        );
-    }
-
-    void poll() {
-        char* xwii_path; 
-        while (xwii_path = xwii_monitor_poll(monitor.ref)) {
-            std::string path = xwii_path;
-            if (std::find(deviceNames.begin(), deviceNames.end(), path) == deviceNames.end()) {
-                deviceNames.push_back(path);
-            }
-            free(xwii_path);
-        }
-    }
-
-    int count() {
-        return deviceNames.size();
-    }
-
-    Xwiimote::Ptr get_device(int i) {
-        std::string devName = deviceNames[i];
-        auto found = openedDevices.find(devName);
-        if (found != openedDevices.cend()) {
-            return found->second;
-        }
-        Xwiimote::Ptr result(new Xwiimote(devName));
-        openedDevices[devName] = result;
-        return result;
-    }
-};
 
 constexpr int64_t clamp(int64_t v, int64_t min, int64_t max) {
     return (v < min) ? min : ((v > max) ? max : v);
@@ -135,6 +33,128 @@ static const IRData INVALID_IR = {
     Vector3()
 };
 
+class IrSpotClustering {
+private:
+public:
+    bool valid;
+    Vector3 leftPoint;
+    Vector3 rightPoint;
+
+    Scalar defaultDistance;
+
+    void processIrSpots(const IRData* irSpots) {
+        int noValid = 0;
+        const IRData* validList[4];
+        std::fill(validList, validList + 4, nullptr);
+        for (int i = 0; i < 4; i++) {
+            if (irSpots[i].valid) {
+                validList[noValid] = irSpots + i;
+                noValid++;
+            }
+        }
+
+        Scalar distanceMatrix[4][4];
+        for (int i = 0; i < noValid; i++) {
+            for (int j = 0; j < noValid; j++) {
+                if (i > j) {
+                    distanceMatrix[i][j] = distanceMatrix[j][i];
+                } else if (i == j) {
+                    distanceMatrix[i][j] = 0;
+                } else {
+                    distanceMatrix[i][j] = (validList[i]->point - validList[j]->point).len();
+                }
+            }
+        }
+
+        switch (noValid) {
+            case 1:
+                valid = true;
+                rightPoint = leftPoint = validList[0]->point;
+                break;
+            case 2:
+            case 3:
+            case 4:
+                {
+                    valid = true;
+                
+                    // do a quick two-iterations k-means clustering
+                    Vector3 clusterPoints[2] = {
+                        leftPoint.redivide(100),
+                        rightPoint.redivide(100)
+                    };
+                    if (leftPoint == rightPoint) {
+                        clusterPoints[1] = rightPoint + Vector3(1, 0, 0);
+                    }
+
+                    for (int _iter = 0; _iter < 2; _iter++) {
+                        Vector3 clusterSums[2] = {Vector3(), Vector3()};
+                        int clusterCounts[2] = {0, 0};
+
+                        for (int i = 0; i < noValid; i++) {
+                            int closestCluster = -1;
+                            Scalar closestDistance = 0L;
+                            for (int c = 0; c < 2; c++) {
+                                Scalar d = (validList[i]->point - clusterPoints[c]).len();
+
+                                if ((d < closestDistance) || (closestCluster < 0)) {
+                                    closestDistance = d;
+                                    closestCluster = c;
+                                }
+                            }
+
+                            clusterSums[closestCluster] = clusterSums[closestCluster] + validList[i]->point;
+                            clusterCounts[closestCluster]++;
+                        }
+
+                        for (int i = 0; i < 2; i++) {
+                            if (clusterCounts[i] > 0) {
+                                clusterPoints[i] = clusterSums[i] / clusterCounts[i];
+                            }
+                            clusterPoints[i] = clusterPoints[i].redivide(100);
+                        }
+
+                        // if one of the two clusters is empty, we assign a point
+                        // from the filled cluster that is furthest away from the
+                        // newly computed clusterPoint
+                        if (clusterCounts[0] == 0) {
+                            clusterCounts[0] = clusterCounts[1];
+                            clusterPoints[0] = clusterPoints[1];
+                            clusterCounts[1] = 0;
+                        }
+                        if (clusterCounts[1] == 0) {
+                            Scalar maxDistance = 0;
+                            int maxDistanceIndex = 0;
+                            for (int i = 0; i < noValid; i++) {
+                                Scalar d = (validList[i]->point - clusterPoints[0]).len();
+                                if (d > maxDistance) {
+                                    maxDistance = d;
+                                    maxDistanceIndex = i;
+                                }
+                            }
+                            clusterPoints[1] = validList[maxDistanceIndex]->point.redivide(100);
+                        }
+                    }
+
+                    if (clusterPoints[0].values[0].value < clusterPoints[1].values[0].value) {
+                        leftPoint = clusterPoints[0].undivide();
+                        rightPoint = clusterPoints[1].undivide();
+                    } else {
+                        leftPoint = clusterPoints[1].undivide();
+                        rightPoint = clusterPoints[0].undivide();
+                    }
+                }
+                break;
+            default:
+                valid = false;
+                break;
+        }
+    }
+
+    IrSpotClustering() : defaultDistance(300) {
+        valid = false;
+    }
+};
+
 class WiiMouse {
 private:
     Xwiimote::Ptr wiimote;
@@ -142,16 +162,36 @@ private:
 
     Vector3 smoothCoord;
 
+    IRData irSpots[4];
+    IrSpotClustering irSpotClustering;
+
     std::chrono::time_point<std::chrono::steady_clock> lastupdate;
 public:
+    Scalar getIrSpotDistance() const {
+        return irSpotClustering.defaultDistance;
+    }
+
+    void setIrSpotDistance(int distance) {
+        irSpotClustering.defaultDistance = distance;
+    }
+
+    bool hasValidLeftRight() const {
+        return irSpotClustering.valid;
+    }
+
+    Vector3 getLeftPoint() const {
+        return irSpotClustering.leftPoint.undivide();
+    }
+
+    Vector3 getRightPoint() const {
+        return irSpotClustering.rightPoint.undivide();
+    }
+
     IRData getIrSpot(int i) const {
         if ((i < 0) || (i >= 4)) {
             return INVALID_IR;
         }
-        IRData r;
-        r.point = Vector3(wiimote->irdata[i].x, wiimote->irdata[i].y, 0);
-        r.valid = xwii_event_ir_is_valid(&(wiimote->irdata[i])) && (r.point.len() > 0);
-        return r;
+        return irSpots[i];
     }
 
     void process() {
@@ -185,17 +225,28 @@ public:
             vmouse.move(c.values[0].value + 5000, c.values[1].value + 5000);
         }
 
-        //std::cout << "+++++++++++++" << std::endl;
-        //std::cout << "v1" << wiimote->irdata[0] << std::endl;
-        //std::cout << "v2" << wiimote->irdata[1] << std::endl;
-        //std::cout << "v3" << wiimote->irdata[2] << std::endl;
-        //std::cout << "v4" << wiimote->irdata[3] << std::endl;
+        {
+            IRData r;
+            for (int i = 0; i < 4; i++) {
+                r.point = Vector3(
+                    wiimote->irdata[i].x, wiimote->irdata[i].y, 0
+                );
+                r.valid = xwii_event_ir_is_valid(
+                    &(wiimote->irdata[i])
+                ) && (r.point.len() > 0);
+                irSpots[i] = r;
+            }
+
+            irSpotClustering.processIrSpots(irSpots);
+        }
 
         lastupdate = now;
     }
 
     WiiMouse(Xwiimote::Ptr wiimote) : wiimote(wiimote), vmouse(10001) {
         lastupdate = std::chrono::steady_clock::now();
+
+        std::fill(irSpots, irSpots + 4, INVALID_IR);
     }
 };
 
@@ -227,6 +278,7 @@ int main() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         wmouse.process();
 
+        // Send raw ir data
         for (int i = 0; i < 4; i++) {
             IRData d = wmouse.getIrSpot(i);
             snprintf(
@@ -240,6 +292,23 @@ int main() {
             );
             csocket.broadcastMessage(irMessageBuffer);
         }
+
+        // Send clustered left/right data
+        if (wmouse.hasValidLeftRight()) {
+            snprintf(
+                irMessageBuffer,
+                1024,
+                "lr:%i:%i:%i:%i\n",
+                (int) wmouse.getLeftPoint().values[0].value,
+                (int) wmouse.getLeftPoint().values[1].value,
+                (int) wmouse.getRightPoint().values[0].value,
+                (int) wmouse.getRightPoint().values[1].value
+            );
+            csocket.broadcastMessage(irMessageBuffer);
+        } else {
+            csocket.broadcastMessage("ir:invalid\n");
+        }
+        
     }
 
     std::cout << "Mouse driver stopped!" << std::endl;

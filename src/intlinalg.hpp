@@ -47,7 +47,7 @@ struct Scalar {
         if (divisor >= other.divisor) {
             return value < other.redivide(divisor).value;
         } else {
-            return other < *this;
+            return redivide(other.divisor).value < other.value;
         }
     }
 
@@ -55,7 +55,7 @@ struct Scalar {
         if (divisor >= other.divisor) {
             return value > other.redivide(divisor).value;
         } else {
-            return other > *this;
+            return redivide(other.divisor).value > other.value;
         }
     }
 
@@ -76,9 +76,14 @@ struct Scalar {
             return o + *this;
         }
 
+        if (o.divisor == 0) {
+            std::cout << o.value << "/" << o.divisor << std::endl;
+            throw DivisionByZeroError();
+        }
+
         return Scalar(
-            value * o.divisor / divisor + o.value,
-            o.divisor
+            o.redivide(divisor).value + value,
+            divisor
         );
     }
 
@@ -113,12 +118,15 @@ struct Scalar {
     }
 
     Scalar& operator=(const Scalar& other) {
+        if (other.divisor == 0) {
+            throw DivisionByZeroError();
+        }
         value = other.value;
         divisor = other.divisor;
         return *this;
     }
 
-    Scalar sqrt(int64_t extraPrec) const {
+    Scalar sqrt(int64_t extraPrec=100L) const {
         extraPrec *= extraPrec;
         return Scalar(
             isqrt(value * extraPrec), 
@@ -143,6 +151,9 @@ struct Scalar {
     Scalar(int64_t _value, int64_t _divisor) {
         value = _value;
         divisor = _divisor;
+        if (_divisor == 0) {
+            throw DivisionByZeroError();
+        }
     }
 };
 
@@ -150,6 +161,12 @@ struct Scalar {
 struct Vector3 {
     Scalar values[3];
     Scalar cachedLen;
+
+    bool operator==(const Vector3& other) const {
+        return values[0] == other.values[0] && 
+            values[1] == other.values[1] && 
+            values[2] == other.values[2];
+    }    
 
     Vector3 operator-() const {
         return Vector3(
@@ -213,9 +230,9 @@ struct Vector3 {
         return redivide(1L);
     }
 
-    Scalar len() {
+    Scalar len(int64_t extraPrec=100L) {
         if (cachedLen < 0) {
-            cachedLen = dot(*this).sqrt(100);
+            cachedLen = dot(*this).sqrt(extraPrec);
         }
         return cachedLen;
     }

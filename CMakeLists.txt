@@ -49,6 +49,7 @@ add_executable(
         src/intlinalg.hpp
         src/controlsocket.hpp
         src/controlsocket.cpp
+        src/device.hpp
 )
 add_dependencies(xwiimote-mouse-driver sockpp-install)
 target_include_directories(
