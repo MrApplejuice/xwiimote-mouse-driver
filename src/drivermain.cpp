@@ -306,7 +306,7 @@ int main() {
             );
             csocket.broadcastMessage(irMessageBuffer);
         } else {
-            csocket.broadcastMessage("ir:invalid\n");
+            csocket.broadcastMessage("lr:invalid\n");
         }
         
     }
