@@ -165,7 +165,6 @@ void ControlSocket :: threadMain() {
                 ));
             }
         }
-
     }
 }
 

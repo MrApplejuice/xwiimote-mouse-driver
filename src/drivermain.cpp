@@ -189,6 +189,10 @@ public:
         return irSpotClustering.rightPoint.undivide();
     }
 
+    const WiimoteButtonStates& getButtonStates() const {
+        return wiimote->buttonStates;
+    }
+
     IRData getIrSpot(int i) const {
         if ((i < 0) || (i >= 4)) {
             return INVALID_IR;
@@ -278,6 +282,7 @@ int main() {
     signal(SIGINT, signalHandler);
 
     char irMessageBuffer[1024];
+    WiimoteButtonStates buttonStates;
     while (!interuptMainLoop) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         wmouse.process();
@@ -328,6 +333,17 @@ int main() {
             csocket.broadcastMessage(irMessageBuffer);
         } else {
             csocket.broadcastMessage("lr:invalid\n");
+        }
+
+        if (buttonStates != wmouse.getButtonStates()) {
+            buttonStates = wmouse.getButtonStates();
+            snprintf(
+                irMessageBuffer,
+                1024,
+                "b:%s\n",
+                buttonStates.toMsgState().c_str()
+            );
+            csocket.broadcastMessage(irMessageBuffer);
         }
     }
 
