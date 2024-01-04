@@ -80,7 +80,11 @@ void ConnectionHandler :: threadMain() {
                             continue;
                         }
 
-                        
+                        pushCommand(Command{
+                            parts[0],
+                            std::vector<std::string>(parts.begin() + 1, parts.end()),
+                            this
+                        });
                     }
                 }
             }
@@ -170,14 +174,19 @@ void ControlSocket :: threadMain() {
 
 void ControlSocket :: processEvents(CommandHandleFunction handler) {
     std::lock_guard<std::mutex> lock(sharedResourceMutex);
+    if (commands.size() == 0) {
+        return;
+    }
+    
     for (Command command : commands) {
         auto found = std::find(handlerThreads.begin(), handlerThreads.end(), command.handler);
         if ((found == handlerThreads.end()) || (!(*found)->isAlive())) {
             continue;
         }
 
+        std::cout << "Committing command to handler: " << command.name << std::endl;
         std::string result = handler(command.name, command.parameters);
-        command.handler->sendMessage(result);
+        command.handler->sendMessage(result + "\n");
     }
     commands.clear();
 }
