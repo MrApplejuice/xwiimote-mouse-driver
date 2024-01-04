@@ -244,7 +244,17 @@ public:
         }
 
         if (mouseEnabled) {
-            // handle mouse movement!
+            if (irSpotClustering.valid) {
+                Vector3 l = (irSpotClustering.leftPoint * 10000 / 1024);
+                Vector3 r = (irSpotClustering.rightPoint * 10000 / 1024);
+                Vector3 mid = ((l + r) / 2).undivide();
+
+                vmouse.move(
+                    10000 - mid.values[0].value,
+                    mid.values[1].value
+                );
+                vmouse.setButtonPressed(0, wiimote->buttonStates.a);
+            }
         }
 
         lastupdate = now;
