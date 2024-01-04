@@ -5,16 +5,27 @@
 #include <memory>
 #include <thread>
 #include <mutex>
+#include <functional>
 
 #include "sockpp/unix_acceptor.h"
 #include "sockpp/version.h"
 
-typedef void (*CommandHandleFunction)(const std::string& command, const std::vector<std::string>& parameters);
+class ConnectionHandler;
+
+struct Command {
+    std::string name;
+    std::vector<std::string> parameters;
+    ConnectionHandler* handler;
+};
+
+typedef std::function<std::string(const std::string& command, const std::vector<std::string>& parameters)> CommandHandleFunction;
+typedef std::function<void(const Command& command)> PushCommandFunction;
 
 class ConnectionHandler {
 private:
-    sockpp::unix_socket socket;
     bool alive;
+    sockpp::unix_socket socket;
+    PushCommandFunction pushCommand;
     std::thread thread;
 
     void threadMain();
@@ -24,18 +35,20 @@ public:
     void sendMessage(const std::string& msg);
     void startShutdown();
 
-    ConnectionHandler(sockpp::unix_socket& _socket);
+    ConnectionHandler(sockpp::unix_socket& _socket, PushCommandFunction _pushCommand);
     ~ConnectionHandler();
 };
 
 class ControlSocket {
 private:
     bool alive;
+    std::mutex sharedResourceMutex;
     std::thread mainThread;
+
     std::shared_ptr<sockpp::unix_acceptor> acceptor;
     std::vector<ConnectionHandler*> handlerThreads;
 
-    std::mutex sharedResourceMutex;
+    std::vector<Command> commands;
 
     void threadMain();
 public:

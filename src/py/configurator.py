@@ -43,6 +43,11 @@ class UnixSocketReader:
         else:
             print(f"Unknown message: {message}")
 
+    def send_message(self, name: str, *params):
+        self.sock.sendall(
+            (":".join([name] + [str(x) for x in params]) + "\n").encode()
+        )
+
     def read_socket(self):
         try:
             data = self.sock.recv(1024)

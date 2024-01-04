@@ -167,6 +167,8 @@ private:
 
     std::chrono::time_point<std::chrono::steady_clock> lastupdate;
 public:
+    bool mouseEnabled;
+
     Scalar getIrSpotDistance() const {
         return irSpotClustering.defaultDistance;
     }
@@ -220,9 +222,6 @@ public:
                     newCoord * Scalar(10, 100)
                 ).redivide(100);
             }
-
-            Vector3 c = smoothCoord.redivide(1);
-            vmouse.move(c.values[0].value + 5000, c.values[1].value + 5000);
         }
 
         {
@@ -240,10 +239,15 @@ public:
             irSpotClustering.processIrSpots(irSpots);
         }
 
+        if (mouseEnabled) {
+            // handle mouse movement!
+        }
+
         lastupdate = now;
     }
 
     WiiMouse(Xwiimote::Ptr wiimote) : wiimote(wiimote), vmouse(10001) {
+        mouseEnabled = true;
         lastupdate = std::chrono::steady_clock::now();
 
         std::fill(irSpots, irSpots + 4, INVALID_IR);
@@ -277,6 +281,23 @@ int main() {
     while (!interuptMainLoop) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         wmouse.process();
+        csocket.processEvents(
+            [&wmouse](const std::string& command, const std::vector<std::string>& parameters) {
+                if (command == "mouse") {
+                    if (parameters.size() == 1) {
+                        if (parameters[0] == "on") {
+                            wmouse.mouseEnabled = true;
+                            return "OK";
+                        } else if (parameters[0] == "off") {
+                            wmouse.mouseEnabled = false;
+                            return "OK";
+                        }
+                        return "ERROR:Invalid parameter";
+                    }
+                }
+                return "ERROR:Invalid command";
+            }
+        );
 
         // Send raw ir data
         for (int i = 0; i < 4; i++) {
@@ -308,7 +329,6 @@ int main() {
         } else {
             csocket.broadcastMessage("lr:invalid\n");
         }
-        
     }
 
     std::cout << "Mouse driver stopped!" << std::endl;

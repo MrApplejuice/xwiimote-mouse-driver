@@ -13,6 +13,39 @@ class SocketCreationFailed : public SocketFailed {};
 
 static const std::string SOCKET_ADDR = "/tmp/wiimote-mouse.sock";
 
+static std::vector<std::string> split(const std::string& str, char delim) {
+    std::vector<std::string> result;
+    std::string current = "";
+    for (char c : str) {
+        if (c == delim) {
+            result.push_back(current);
+            current = "";
+        } else {
+            current += c;
+        }
+    }
+    if (current.length()) {
+        result.push_back(current);
+    }
+    return result;
+}
+
+static constexpr bool isWhitespace(char c) {
+    return (c == ' ') || (c == '\t') || (c == '\n') || (c == '\r');
+}
+
+static std::string trim(const std::string& str) {
+    int start = 0;
+    int end = str.length() - 1;
+    while ((start < end) && isWhitespace(str[start])) {
+        start++;
+    }
+    while ((start < end) && isWhitespace(str[end])) {
+        end--;
+    }
+    return str.substr(start, end - start + 1);
+}
+
 void ConnectionHandler :: threadMain() {
     char readbuffer[1024];
 
@@ -34,7 +67,21 @@ void ConnectionHandler :: threadMain() {
                         readbuffer[readn] = 0;
                     }
 
-                    std::cout << "received: " << readbuffer << std::endl;
+                    const std::string messages(readbuffer);
+                    auto messageList = split(messages, '\n');
+                    for (std::string msg : messageList) {
+                        msg = trim(msg);
+                        if (!msg.length()) {
+                            continue;
+                        }
+
+                        auto parts = split(msg, ':');
+                        if (parts.size() < 1) {
+                            continue;
+                        }
+
+                        
+                    }
                 }
             }
             if (polldata.revents & POLLHUP) {
@@ -66,7 +113,10 @@ void ConnectionHandler :: startShutdown() {
     alive = false;
 }
 
-ConnectionHandler :: ConnectionHandler(sockpp::unix_socket& _socket) : socket(_socket.release()) {
+ConnectionHandler :: ConnectionHandler(
+    sockpp::unix_socket& _socket,
+    PushCommandFunction _pushCommand
+) : socket(_socket.release()), pushCommand(_pushCommand) {
     alive = true;
     thread = std::thread(&ConnectionHandler::threadMain, this);
 }
@@ -106,7 +156,13 @@ void ControlSocket :: threadMain() {
                     delete ht;
                 }
 
-                handlerThreads.push_back(new ConnectionHandler(sock));
+                handlerThreads.push_back(new ConnectionHandler(
+                    sock,
+                    [this](const Command& command) {
+                        std::lock_guard<std::mutex> lock(sharedResourceMutex);
+                        commands.push_back(command);
+                    }
+                ));
             }
         }
 
@@ -114,6 +170,17 @@ void ControlSocket :: threadMain() {
 }
 
 void ControlSocket :: processEvents(CommandHandleFunction handler) {
+    std::lock_guard<std::mutex> lock(sharedResourceMutex);
+    for (Command command : commands) {
+        auto found = std::find(handlerThreads.begin(), handlerThreads.end(), command.handler);
+        if ((found == handlerThreads.end()) || (!(*found)->isAlive())) {
+            continue;
+        }
+
+        std::string result = handler(command.name, command.parameters);
+        command.handler->sendMessage(result);
+    }
+    commands.clear();
 }
 
 void ControlSocket :: broadcastMessage(const std::string& msg) {
