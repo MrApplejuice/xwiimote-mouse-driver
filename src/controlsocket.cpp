@@ -131,20 +131,19 @@ ConnectionHandler :: ~ConnectionHandler() {
 }
 
 void ControlSocket :: threadMain() {
-    timespec timeout;
-    timeout.tv_nsec = 100000000L;
-    timeout.tv_sec = 0L;
-
-    sockpp::socket_t handle = acceptor->handle();
     struct pollfd polldata;
-    polldata.fd = handle;
+    polldata.fd = acceptor->handle();
     polldata.events = POLLERR | POLLIN | POLLPRI | POLLHUP;
 
     while (alive) {
         polldata.revents = 0;
-        int ppollres = poll(&polldata, 1, 50);
-        if (polldata.revents) {
-            if (sockpp::unix_socket sock = acceptor->accept()) {
+        int pollres = poll(&polldata, 1, 50);
+        if (polldata.revents || pollres) {
+            if (polldata.revents & POLLHUP) {
+                alive = false;
+                acceptor->close();
+                continue;
+            } else if (sockpp::unix_socket sock = acceptor->accept()) {
                 std::lock_guard<std::mutex> lock(sharedResourceMutex);
 
                 std::vector<ConnectionHandler*> toRemove;
@@ -168,6 +167,7 @@ void ControlSocket :: threadMain() {
                     }
                 ));
             }
+
         }
     }
 }
