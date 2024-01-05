@@ -165,9 +165,23 @@ private:
     IRData irSpots[4];
     IrSpotClustering irSpotClustering;
 
+    Vector3 calmatX;
+    Vector3 calmatY;
+
     std::chrono::time_point<std::chrono::steady_clock> lastupdate;
 public:
     bool mouseEnabled;
+
+    void getCalibrationVectors(Vector3& x, Vector3& y) const {
+        x = calmatX;
+        y = calmatY;
+    }
+
+    void setCalibrationVectors(const Vector3& x, const Vector3& y) {
+        std::cout << "Calibration vectors set to " << x << " and " << y << std::endl;
+        calmatX = x.redivide(100);
+        calmatY = y.redivide(100);
+    }
 
     Scalar getIrSpotDistance() const {
         return irSpotClustering.defaultDistance;
@@ -245,15 +259,20 @@ public:
 
         if (mouseEnabled) {
             if (irSpotClustering.valid) {
-                Vector3 l = (irSpotClustering.leftPoint * 10000 / 1024);
-                Vector3 r = (irSpotClustering.rightPoint * 10000 / 1024);
-                Vector3 mid = ((l + r) / 2).undivide();
+                Vector3 mid = (
+                    (irSpotClustering.leftPoint + irSpotClustering.rightPoint) / 2
+                ).undivide();
+                mid.values[2] = 1;
 
                 vmouse.move(
-                    10000 - mid.values[0].value,
-                    mid.values[1].value
+                    clamp(calmatX.dot(mid).undivide().value, 0, 10000),
+                    clamp(calmatY.dot(mid).undivide().value, 0, 10000)
                 );
                 vmouse.setButtonPressed(0, wiimote->buttonStates.a);
+                vmouse.setButtonPressed(2, wiimote->buttonStates.b);
+            } else {
+                vmouse.setButtonPressed(0, false);
+                vmouse.setButtonPressed(2, false);
             }
         }
 
@@ -265,6 +284,8 @@ public:
         lastupdate = std::chrono::steady_clock::now();
 
         std::fill(irSpots, irSpots + 4, INVALID_IR);
+        calmatX = Vector3(Scalar(-10000, 1024), 0, 10000).redivide(100);
+        calmatY = Vector3(0, Scalar(10000, 1024), 0).redivide(100);
     }
 };
 
@@ -308,6 +329,31 @@ int main() {
                             return "OK";
                         }
                         return "ERROR:Invalid parameter";
+                    }
+                }
+                if (command == "cal100") {
+                    if (parameters.size() == 6) {
+                        Vector3 x, y;
+                        try {
+                            x = Vector3(
+                                Scalar(std::stoll(parameters[0]), 100),
+                                Scalar(std::stoll(parameters[1]), 100),
+                                Scalar(std::stoll(parameters[2]), 100)
+                            );
+                            y = Vector3(
+                                Scalar(std::stoll(parameters[3]), 100),
+                                Scalar(std::stoll(parameters[4]), 100),
+                                Scalar(std::stoll(parameters[5]), 100)
+                            );
+                        } 
+                        catch (std::invalid_argument& e) {
+                            return "ERROR:Invalid parameter";
+                        }
+                        catch (std::out_of_range& e) {
+                            return "ERROR:Invalid parameter";
+                        }
+                        wmouse.setCalibrationVectors(x, y);
+                        return "OK";
                     }
                 }
                 return "ERROR:Invalid command";

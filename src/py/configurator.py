@@ -39,6 +39,7 @@ class WiimoteSocketReader:
 
         self.lr_vectors = None
         self.ir_vectors = [None] * 4
+        self.pressed_buttons = []
 
         self.open_commands = []
         self.closed_commands = []
@@ -63,6 +64,8 @@ class WiimoteSocketReader:
                 self.ir_vectors[index] = np.array(
                     [int(x) for x in message_parts[3:5]]
                 )
+        elif message_parts[0] == "b":
+            self.pressed_buttons = [m for m in message_parts[1:] if m]
         else:
             print(f"Unknown message: {message}")
 
@@ -191,6 +194,7 @@ class Window:
 
         button1 = tk.Button(button_frame, text="Start calibration")
         button1.pack(side=tk.LEFT) 
+        self.btn_start_calibration = button1
 
         button2 = tk.Button(button_frame, text="Button 2")
         button2.pack(side=tk.LEFT)
@@ -242,6 +246,54 @@ class ClosingLogic(Logic):
         if not self.wiimote.open_commands:
             self.win.root.destroy()
 
+
+class CalibrationLogic(Logic):
+    on_completed = None
+    on_exit = None
+
+    STEPS = [
+        "Point the wiimote to the center of the screen, then press A; press B to cancel",
+        "Point the wiimote to the top-left corner of the screen, then press A; press B to cancel",
+        "Point the wiimote to the top-right corner of the screen, then press A; press B to cancel",
+        "Point the wiimote to the bottom-left corner of the screen, then press A; press B to cancel",
+        "Point the wiimote to the bottom-right corner of the screen, then press A; press B to cancel",
+        "Calibration completed",
+    ]
+
+    def start(self):
+        self.btn_was_pressed = False
+        self.step_data = []
+        self.win.btn_start_calibration.config(highlightcolor="blue", highlightthickness=5)
+
+    def process_socket_data(self):
+        self.win.text_box.config(text=self.STEPS[len(self.step_data)])
+        if len(self.step_data) == len(self.STEPS) - 1:
+            if self.on_completed:
+                self.on_completed()
+            if self.on_exit:
+                self.on_exit()
+            return
+
+        if not self.btn_was_pressed:
+            if "a" in self.wiimote.pressed_buttons:
+                self.step_data.append(self.wiimote.lr_vectors)
+            elif "b" in self.wiimote.pressed_buttons:
+                if self.on_exit:
+                    self.on_exit()
+        self.btn_was_pressed = bool(len(self.wiimote.pressed_buttons))
+
+        if self.wiimote.lr_vectors is None:
+            self.win.canvas.config(bg="red")
+        elif self.wiimote.lr_vectors[0].tolist() == self.wiimote.lr_vectors[1].tolist():
+            self.win.canvas.config(bg="yellow")
+        else:
+            self.win.canvas.config(bg="green")
+        self.win.crosses.update(self.wiimote.lr_vectors)
+
+    def stop(self):
+        self.win.btn_start_calibration.config(highlightthickness=0)
+
+
 def main():
     root = tk.Tk()
     root.title("Wiimote mouse configurator")
@@ -271,6 +323,42 @@ def main():
         switch_logic(ClosingLogic(window, wiimote))
     
     root.protocol("WM_DELETE_WINDOW", on_close)
+
+    def send_calibration_data(calibration_logic):
+        data = calibration_logic.step_data[1:5]
+
+        wii_corners = [
+            np.mean(d, axis=0) for d in data
+        ]
+        wii_corner_mat = np.hstack(
+            [wii_corners, np.ones([4, 1])]
+        )
+
+        corners = np.array([
+            [0, 0],
+            [10000, 0],
+            [0, 10000],
+            [10000, 10000],
+        ])
+
+        print(wii_corner_mat)
+        print(corners)
+        
+        calmat, _, __, ___ = np.linalg.lstsq(wii_corner_mat, corners, rcond=None)
+
+        int64_calmat = (calmat * 100).astype(np.int64).T
+
+        print(f"Sending calibration data: {int64_calmat}")
+        wiimote.send_message("cal100", *int64_calmat.flatten().tolist())
+
+    def on_start_calibration():
+        calibration_logic = CalibrationLogic(window, wiimote)
+        calibration_logic.on_exit = lambda: switch_logic(idle_logic)
+        calibration_logic.on_completed = lambda: send_calibration_data(calibration_logic)
+
+        switch_logic(calibration_logic)
+
+    window.btn_start_calibration.config(command=on_start_calibration)
 
     try:
         root.mainloop()
