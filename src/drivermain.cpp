@@ -17,7 +17,7 @@
 #include "virtualmouse.hpp"
 #include "controlsocket.hpp"
 #include "device.hpp"
-
+#include "settings.hpp"
 
 constexpr int64_t clamp(int64_t v, int64_t min, int64_t max) {
     return (v < min) ? min : ((v > max) ? max : v);
@@ -298,6 +298,12 @@ void signalHandler(int signum) {
 int main() {
     XwiimoteMonitor monitor;
 
+    Config config(DEFAULT_CONFIG_PATH);
+    config.provideDefault("socket_address", DEFAULT_SOCKET_ADDR);
+    config.parseConfigFile();
+
+    ControlSocket csocket(config.stringOptions["socket_address"]);
+
     monitor.poll();
     if (monitor.count() <= 0) {
         std::cout << "No Wiimote found. Please pair a new Wiimote now." << std::endl;
@@ -308,7 +314,6 @@ int main() {
     } 
 
     WiiMouse wmouse(monitor.get_device(0));
-    ControlSocket csocket;
     std::cout << "Mouse driver started!" << std::endl;
     signal(SIGINT, signalHandler);
 

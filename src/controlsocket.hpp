@@ -12,6 +12,8 @@
 
 class ConnectionHandler;
 
+static const std::string DEFAULT_SOCKET_ADDR = "./wiimote-mouse.sock";
+
 struct Command {
     std::string name;
     std::vector<std::string> parameters;
@@ -41,6 +43,8 @@ public:
 
 class ControlSocket {
 private:
+    std::string socketAddr;
+
     bool alive;
     std::mutex sharedResourceMutex;
     std::thread mainThread;
@@ -55,6 +59,6 @@ public:
     void processEvents(CommandHandleFunction handler);
     void broadcastMessage(const std::string& msg);
 
-    ControlSocket();
+    ControlSocket(std::string socketAddr);
     ~ControlSocket();
 };

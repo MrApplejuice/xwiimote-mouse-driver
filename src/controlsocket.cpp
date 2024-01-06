@@ -11,8 +11,6 @@
 class SocketFailed : public std::exception {};
 class SocketCreationFailed : public SocketFailed {};
 
-static const std::string SOCKET_ADDR = "/tmp/wiimote-mouse.sock";
-
 static std::vector<std::string> split(const std::string& str, char delim) {
     std::vector<std::string> result;
     std::string current = "";
@@ -199,7 +197,7 @@ void ControlSocket :: broadcastMessage(const std::string& msg) {
     }
 }
 
-ControlSocket :: ControlSocket() {
+ControlSocket :: ControlSocket(std::string socketAddr) : socketAddr(socketAddr) {
     alive = true;
     sockpp::initialize();
 
@@ -207,7 +205,7 @@ ControlSocket :: ControlSocket() {
     int yes = 1;
     acceptor->set_option(SOL_SOCKET, SO_REUSEADDR, &yes);
 
-    auto res = acceptor->open(sockpp::unix_address(SOCKET_ADDR));
+    auto res = acceptor->open(sockpp::unix_address(socketAddr));
     if (!res) {
         throw SocketCreationFailed();
     }
@@ -237,5 +235,5 @@ ControlSocket :: ~ControlSocket() {
         acceptor->close();
     }
 
-    std::remove(SOCKET_ADDR.c_str());
+    std::remove(socketAddr.c_str());
 }
