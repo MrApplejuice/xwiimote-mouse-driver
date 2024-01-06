@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import ctypes
-import time
+import argparse
 
 _libc_path = ctypes.util.find_library("c")
 _libc = ctypes.CDLL(_libc_path)
@@ -295,6 +295,20 @@ class CalibrationLogic(Logic):
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        prog="Wiimote mouse configurator",
+        description="Configuration tool for the xwiimote-mouse-driver",
+    )
+
+    parser.add_argument(
+        "--socket-path",
+        type=str,
+        default="wiimote-mouse.sock",
+        help="Path to the socket to use for communication with the driver",
+    )
+
+    args = parser.parse_args()
+
     root = tk.Tk()
     root.title("Wiimote mouse configurator")
 
@@ -306,7 +320,7 @@ def main():
 
         current_logic.process_socket_data()
 
-    wiimote = WiimoteSocketReader("/tmp/wiimote-mouse.sock", root, new_socket_data)
+    wiimote = WiimoteSocketReader(args.socket_path, root, new_socket_data)
     wiimote.send_message("mouse", "off")
 
     idle_logic = IdleLogic(window, wiimote)

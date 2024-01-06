@@ -298,11 +298,16 @@ void signalHandler(int signum) {
 int main() {
     XwiimoteMonitor monitor;
 
-    Config config(DEFAULT_CONFIG_PATH);
-    config.provideDefault("socket_address", DEFAULT_SOCKET_ADDR);
+    std::string configFilePath = DEFAULT_CONFIG_PATH;
+    std::cout << "Config file: " << configFilePath << std::endl;
+
+    Config config(configFilePath);
     config.parseConfigFile();
 
-    ControlSocket csocket(config.stringOptions["socket_address"]);
+    config.provideDefault("socket_address", DEFAULT_SOCKET_ADDR);
+    std::string socketAddr = config.stringOptions["socket_address"];
+    ControlSocket csocket(socketAddr);
+    std::cout << "Socket address: " << socketAddr << std::endl;
 
     monitor.poll();
     if (monitor.count() <= 0) {
@@ -314,6 +319,16 @@ int main() {
     } 
 
     WiiMouse wmouse(monitor.get_device(0));
+    {
+        Vector3 defX, defY;
+        wmouse.getCalibrationVectors(defX, defY);
+        config.provideDefault("calmatX", vector3ToString(defX));
+        config.provideDefault("calmatY", vector3ToString(defY));
+    }
+    wmouse.setCalibrationVectors(
+        config.vectorOptions["calmatX"],
+        config.vectorOptions["calmatY"]
+    );
     std::cout << "Mouse driver started!" << std::endl;
     signal(SIGINT, signalHandler);
 
@@ -323,7 +338,7 @@ int main() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         wmouse.process();
         csocket.processEvents(
-            [&wmouse](const std::string& command, const std::vector<std::string>& parameters) {
+            [&wmouse, &config](const std::string& command, const std::vector<std::string>& parameters) {
                 if (command == "mouse") {
                     if (parameters.size() == 1) {
                         if (parameters[0] == "on") {
@@ -358,6 +373,9 @@ int main() {
                             return "ERROR:Invalid parameter";
                         }
                         wmouse.setCalibrationVectors(x, y);
+                        config.vectorOptions["calmatX"] = x;
+                        config.vectorOptions["calmatY"] = y;
+                        config.writeConfigFile();
                         return "OK";
                     }
                 }

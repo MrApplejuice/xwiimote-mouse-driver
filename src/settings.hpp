@@ -26,8 +26,18 @@ public:
     Config(const std::string& filePath) : filePath(filePath) {}
 
     void provideDefault(const std::string& key, const std::string& value) {
-        if (stringOptions.find(key) == stringOptions.end()) {
-            stringOptions[key] = value;
+        if (isVectorOption(key)) {
+            auto vec = parseVector3(value);
+            if (!vec) {
+                throw std::runtime_error("Failed to parse vector option: " + key);
+            }
+            if (vectorOptions.find(key) == vectorOptions.end()) {
+                vectorOptions[key] = *vec;
+            }
+        } else {
+            if (stringOptions.find(key) == stringOptions.end()) {
+                stringOptions[key] = value;
+            }
         }
     }
 
