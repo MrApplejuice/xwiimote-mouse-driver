@@ -1,6 +1,8 @@
 #include "settings.hpp"
 
-const char* VECTOR_OPTIONS[128] = {
+#include "stringtools.hpp"
+
+const char* VECTOR_OPTIONS[] = {
     "calmatX",
     "calmatY",
     nullptr
@@ -39,10 +41,5 @@ std::string vector3ToString(const Vector3& vec) {
 }
 
 bool isVectorOption(const std::string& key) {
-    for (int i = 0; VECTOR_OPTIONS[i]; i++) {
-        if (key == VECTOR_OPTIONS[i]) {
-            return true;
-        }
-    }
-    return false;
+    return isStringInCstrList(key, VECTOR_OPTIONS);
 }

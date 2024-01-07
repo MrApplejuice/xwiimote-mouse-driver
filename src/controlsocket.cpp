@@ -1,48 +1,13 @@
 #include "controlsocket.hpp"
 
 #include <iostream>
-#include <exception>
 
 #include <cstdio>
 
 #include <poll.h>
 #include <sys/socket.h>
 
-class SocketFailed : public std::exception {};
-class SocketCreationFailed : public SocketFailed {};
-
-static std::vector<std::string> split(const std::string& str, char delim) {
-    std::vector<std::string> result;
-    std::string current = "";
-    for (char c : str) {
-        if (c == delim) {
-            result.push_back(current);
-            current = "";
-        } else {
-            current += c;
-        }
-    }
-    if (current.length()) {
-        result.push_back(current);
-    }
-    return result;
-}
-
-static constexpr bool isWhitespace(char c) {
-    return (c == ' ') || (c == '\t') || (c == '\n') || (c == '\r');
-}
-
-static std::string trim(const std::string& str) {
-    int start = 0;
-    int end = str.length() - 1;
-    while ((start < end) && isWhitespace(str[start])) {
-        start++;
-    }
-    while ((start < end) && isWhitespace(str[end])) {
-        end--;
-    }
-    return str.substr(start, end - start + 1);
-}
+#include "stringtools.hpp"
 
 void ConnectionHandler :: threadMain() {
     char readbuffer[1024];
@@ -207,7 +172,7 @@ ControlSocket :: ControlSocket(std::string socketAddr) : socketAddr(socketAddr) 
 
     auto res = acceptor->open(sockpp::unix_address(socketAddr));
     if (!res) {
-        throw SocketCreationFailed();
+        throw SocketCreationFailed(acceptor->last_error_str());
     }
     mainThread = std::thread(&ControlSocket::threadMain, this);
 }

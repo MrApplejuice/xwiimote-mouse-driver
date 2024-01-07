@@ -52,6 +52,9 @@ add_executable(
         src/device.hpp
         src/settings.hpp
         src/settings.cpp
+        src/stringtools.hpp
+        src/stringtools.cpp
+        src/driveroptparse.hpp
 )
 add_dependencies(xwiimote-mouse-driver sockpp-install)
 target_include_directories(

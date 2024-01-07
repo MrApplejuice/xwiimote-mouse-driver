@@ -6,9 +6,23 @@
 #include <thread>
 #include <mutex>
 #include <functional>
+#include <exception>
 
 #include "sockpp/unix_acceptor.h"
 #include "sockpp/version.h"
+
+class SocketFailed : public std::exception {};
+class SocketCreationFailed : public SocketFailed {
+private:
+    std::string error;
+public:
+    SocketCreationFailed(const std::string& error) : error(error) {}
+    SocketCreationFailed(const SocketCreationFailed& other) = default;
+    
+    const char* what() const noexcept override {
+        return error.c_str();
+    }
+};
 
 class ConnectionHandler;
 

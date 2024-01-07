@@ -10,7 +10,7 @@
 #include "intlinalg.hpp"
 
 static const std::string DEFAULT_CONFIG_PATH = "./wiimote-mouse.conf";
-extern const char* VECTOR_OPTIONS[128];
+extern const char* VECTOR_OPTIONS[];
 
 std::shared_ptr<Vector3> parseVector3(const std::string& str);
 std::string vector3ToString(const Vector3& vec);

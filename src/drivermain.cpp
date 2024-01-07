@@ -18,6 +18,7 @@
 #include "controlsocket.hpp"
 #include "device.hpp"
 #include "settings.hpp"
+#include "driveroptparse.hpp"
 
 constexpr int64_t clamp(int64_t v, int64_t min, int64_t max) {
     return (v < min) ? min : ((v > max) ? max : v);
@@ -295,20 +296,43 @@ void signalHandler(int signum) {
     interuptMainLoop = true;
 }
 
-int main() {
-    XwiimoteMonitor monitor;
+int main(int argc, char* argv[]) {
+    OptionsMap options;
+    try {
+        options = parseOptions(argc, argv);
+    }
+    catch (const InvalidOptionException& e) {
+        std::cerr << e.what() << std::endl;
+        printHelp();
+        return 1;
+    }
 
-    std::string configFilePath = DEFAULT_CONFIG_PATH;
+    if (options.count("help")) {
+        printHelp();
+        return 0;
+    }
+
+    std::string configFilePath = options.defaultString("config-file", DEFAULT_CONFIG_PATH);
     std::cout << "Config file: " << configFilePath << std::endl;
 
     Config config(configFilePath);
     config.parseConfigFile();
 
     config.provideDefault("socket_address", DEFAULT_SOCKET_ADDR);
-    std::string socketAddr = config.stringOptions["socket_address"];
-    ControlSocket csocket(socketAddr);
+    std::string socketAddr = options.defaultString("socket-path", config.stringOptions["socket_address"]);
+
+    std::shared_ptr<ControlSocket> socketref;
+    try {
+        socketref = std::shared_ptr<ControlSocket>(new ControlSocket(socketAddr));
+    }
+    catch (const SocketFailed& e) {
+        std::cerr << "Failed to create socket: " << e.what() << std::endl;
+        return 1;
+    }
+    ControlSocket& csocket = *socketref;
     std::cout << "Socket address: " << socketAddr << std::endl;
 
+    XwiimoteMonitor monitor;
     monitor.poll();
     if (monitor.count() <= 0) {
         std::cout << "No Wiimote found. Please pair a new Wiimote now." << std::endl;
