@@ -147,7 +147,6 @@ void ControlSocket :: processEvents(CommandHandleFunction handler) {
             continue;
         }
 
-        std::cout << "Committing command to handler: " << command.name << std::endl;
         std::string result = handler(command.name, command.parameters);
         command.handler->sendMessage(result + "\n");
     }

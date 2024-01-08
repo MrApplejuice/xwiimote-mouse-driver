@@ -169,12 +169,70 @@ def get_screen_resolution(root):
 
 
 class Window:
+    on_screen_area_updated = None
+
+    screen_area_values = (0, 0, 100, 100)
+
+    def parse_screen_area_values(self):
+        values = []
+        for v in self.screen_area_text_values:
+            try:
+                value = int(v.get().strip("%"))
+            except ValueError:
+                self.screen_area_box.config(bg="red")
+                return
+            values.append(value)
+            
+        self.screen_area_box.config(bg=self.root.cget("bg"))
+        
+        self.screen_area_values = tuple(values)
+        if self.on_screen_area_updated:
+            self.on_screen_area_updated(self.screen_area_values)
+
     def __init__(self, root: tk.Tk):
         self.root = root
 
         main_frame = tk.Frame(root)
         main_frame.pack()
 
+        # Screen subregion controls
+        self.screen_area_box = screen_area_box = tk.Frame(main_frame)
+        screen_area_box.pack()
+
+        # Add label
+        label = tk.Label(screen_area_box, text="Configure screen subregion")
+        label.grid(row=0, columnspan=3)
+
+        # Left edit box
+        self.screen_area_text_values = [
+            tk.StringVar(),
+            tk.StringVar(), 
+            tk.StringVar(),
+            tk.StringVar(),
+        ]
+        for i, v in enumerate(self.screen_area_values):
+            self.screen_area_text_values[i].set(str(v) + "%")
+            self.screen_area_text_values[i].trace_add(
+                "write",
+                lambda *args: self.parse_screen_area_values()
+            )
+        
+        left_entry = tk.Entry(screen_area_box, width=5, textvariable=self.screen_area_text_values[0])
+        left_entry.grid(row=2, column=0)
+
+        # Right edit box
+        self.right_entry = tk.Entry(screen_area_box, width=5, textvariable=self.screen_area_text_values[2])
+        self.right_entry.grid(row=2, column=2)
+
+        # Top edit box
+        self.top_entry = tk.Entry(screen_area_box, width=5, textvariable=self.screen_area_text_values[1])
+        self.top_entry.grid(row=1, column=1)
+
+        # Bottom edit box
+        self.bottom_entry = tk.Entry(screen_area_box, width=5, textvariable=self.screen_area_text_values[3])
+        self.bottom_entry.grid(row=3, column=1)
+
+        # "IR canvas"
         self.canvas = canvas = tk.Canvas(main_frame, width=400, height=400)
         canvas.pack()
         canvas.config(bg="gray")
@@ -182,7 +240,7 @@ class Window:
 
         # Add text box
         self.text_box = text_box = tk.Label(main_frame, justify=tk.CENTER, font=("Arial", 12, "italic"))
-        text_box.config(text="...")
+        text_box.config(text="...", wraplength=400)
         text_box.pack()
 
         # Add space
@@ -313,7 +371,7 @@ def main():
     root.title("Wiimote mouse configurator")
 
     window = Window(root)
-    root.geometry("400x500")
+    root.geometry("800x600")
 
     def new_socket_data():
         nonlocal current_logic
@@ -355,14 +413,9 @@ def main():
             [10000, 10000],
         ])
 
-        print(wii_corner_mat)
-        print(corners)
-        
         calmat, _, __, ___ = np.linalg.lstsq(wii_corner_mat, corners, rcond=None)
 
         int64_calmat = (calmat * 100).astype(np.int64).T
-
-        print(f"Sending calibration data: {int64_calmat}")
         wiimote.send_message("cal100", *int64_calmat.flatten().tolist())
 
     def on_start_calibration():
@@ -373,6 +426,11 @@ def main():
         switch_logic(calibration_logic)
 
     window.btn_start_calibration.config(command=on_start_calibration)
+
+    def on_screen_area_updated(values):
+        wiimote.send_message("screenarea", [v * 10000 // 100 for v in values])
+
+    window.on_screen_area_updated = on_screen_area_updated
 
     try:
         root.mainloop()
