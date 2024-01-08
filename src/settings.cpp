@@ -2,9 +2,20 @@
 
 #include "stringtools.hpp"
 
+const char* VALID_OPTIONS[] = {
+    "socket_address",
+    "calmatX",
+    "calmatY",
+    "screen_top_left",
+    "screen_bottom_right",
+    nullptr
+};
+
 const char* VECTOR_OPTIONS[] = {
     "calmatX",
     "calmatY",
+    "screen_top_left",
+    "screen_bottom_right",
     nullptr
 };
 
@@ -42,4 +53,8 @@ std::string vector3ToString(const Vector3& vec) {
 
 bool isVectorOption(const std::string& key) {
     return isStringInCstrList(key, VECTOR_OPTIONS);
+}
+
+bool isValidOption(const std::string& key) {
+    return isStringInCstrList(key, VALID_OPTIONS);
 }

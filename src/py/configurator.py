@@ -22,6 +22,7 @@ class OpenCommand:
     name: str
     params: Tuple[Any]
     sock: socket.socket
+    callback: Any = None
 
 class WiimoteSocketReader:
     MAX_CLOSED_COMMANDS = 128
@@ -69,12 +70,14 @@ class WiimoteSocketReader:
         else:
             print(f"Unknown message: {message}")
 
-    def send_message(self, name: str, *params):
+    def send_message(self, name: str, *params, callback=None):
         req_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         req_sock.connect(self.socket_path)
         req_sock.settimeout(0.1)
 
-        self.open_commands.append(OpenCommand(name, params, req_sock))
+        self.open_commands.append(
+            OpenCommand(name, params, req_sock, callback)
+        )
 
         data = (":".join([name] + [str(x) for x in params]) + "\n").encode()
         padding = b"\0" * 1024
@@ -104,6 +107,9 @@ class WiimoteSocketReader:
             self.closed_commands.insert(0, (cmd, message_parts[0]))
             while len(self.closed_commands) > self.MAX_CLOSED_COMMANDS:
                 self.closed_commands.pop()
+
+            if cmd.callback:
+                cmd.callback(message_parts[0], message_parts[1:])
 
     def receive_open_command_responses(self):
         for cmd in list(self.open_commands):
@@ -381,6 +387,16 @@ def main():
     wiimote = WiimoteSocketReader(args.socket_path, root, new_socket_data)
     wiimote.send_message("mouse", "off")
 
+    def assign_screenarea(cmd, topLeftBottomRight100):
+        if cmd == "ERROR":
+            print("Error getting screen area")
+            return
+
+        for sv, text in zip(window.screen_area_text_values, topLeftBottomRight100):
+            sv.set(str(int(text) // 10000) + "%")
+
+    wiimote.send_message("getscreenarea100", callback=assign_screenarea)
+
     idle_logic = IdleLogic(window, wiimote)
     current_logic = idle_logic
 
@@ -428,7 +444,7 @@ def main():
     window.btn_start_calibration.config(command=on_start_calibration)
 
     def on_screen_area_updated(values):
-        wiimote.send_message("screenarea", [v * 10000 // 100 for v in values])
+        wiimote.send_message("screenarea100", *[v * 10000 for v in values])
 
     window.on_screen_area_updated = on_screen_area_updated
 

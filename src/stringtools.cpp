@@ -29,7 +29,7 @@ std::string trim(const std::string& str) {
     return str.substr(start, end - start + 1);
 }
 
-extern bool isStringInCstrList(const std::string& key, const char* list[]) {
+bool isStringInCstrList(const std::string& key, const char* list[]) {
     for (int i = 0; list[i]; i++) {
         if (key == list[i]) {
             return true;

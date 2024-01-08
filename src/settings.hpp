@@ -14,7 +14,9 @@ extern const char* VECTOR_OPTIONS[];
 
 std::shared_ptr<Vector3> parseVector3(const std::string& str);
 std::string vector3ToString(const Vector3& vec);
+
 bool isVectorOption(const std::string& key);
+bool isValidOption(const std::string& key);
 
 class Config {
 private:
@@ -56,6 +58,10 @@ public:
             std::istringstream iss(line);
             std::string key, value;
             if (std::getline(iss, key, '=') && std::getline(iss, value)) {
+                if (!isValidOption(key)) {
+                    std::cerr << "Ignoring invalid option: " << key << std::endl;
+                    continue;
+                }
                 if (isVectorOption(key)) {
                     auto vec = parseVector3(value);
                     if (!vec) {

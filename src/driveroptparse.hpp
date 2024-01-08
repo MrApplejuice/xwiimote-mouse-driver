@@ -42,14 +42,14 @@ public:
     }
 };
 
-const static char* VALID_OPTIONS[] = {
+const static char* VALID_COMMANDLINE_OPTIONS[] = {
     "socket-path",
     "config-file",
     "help",
     nullptr
 };
 
-const static char* OPTIONS_WITH_ARG[] = {
+const static char* COMMANDLINE_OPTIONS_WITH_ARG[] = {
     "socket-path",
     "config-file",
     nullptr
@@ -77,7 +77,7 @@ static OptionsMap parseOptions(int argc, char* argv[]) {
             if (pos == std::string::npos) {
                 key = arg.substr(2);
 
-                if (isStringInCstrList(key, OPTIONS_WITH_ARG)) {
+                if (isStringInCstrList(key, COMMANDLINE_OPTIONS_WITH_ARG)) {
                     if (i + 1 < argc) {
                         value = argv[++i];
                     } else {
@@ -90,12 +90,12 @@ static OptionsMap parseOptions(int argc, char* argv[]) {
                 key = arg.substr(2, pos - 2);
                 value = arg.substr(pos + 1);
 
-                if (!isStringInCstrList(key, OPTIONS_WITH_ARG)) {
+                if (!isStringInCstrList(key, COMMANDLINE_OPTIONS_WITH_ARG)) {
                     throw InvalidOptionException(arg);
                 }
             }
             
-            if (!isStringInCstrList(key, VALID_OPTIONS)) {  
+            if (!isStringInCstrList(key, VALID_COMMANDLINE_OPTIONS)) {  
                 throw InvalidOptionException(arg);
             }
             options[key] = value;

@@ -24,6 +24,18 @@ constexpr int64_t clamp(int64_t v, int64_t min, int64_t max) {
     return (v < min) ? min : ((v > max) ? max : v);
 }
 
+Scalar clamp(Scalar v, Scalar min, Scalar max) {
+    return (v < min) ? min : ((v > max) ? max : v);
+}
+
+Scalar min(Scalar a, Scalar b) {
+    return (a < b) ? a : b;
+}
+
+Scalar max(Scalar a, Scalar b) {
+    return (a > b) ? a : b;
+}
+
 struct IRData {
     bool valid;
     Vector3 point;
@@ -169,9 +181,37 @@ private:
     Vector3 calmatX;
     Vector3 calmatY;
 
+    Vector3 screenAreaTopLeft;
+    Vector3 screenAreaBottomRight;
+    Vector3 screenAreaSize;
+
     std::chrono::time_point<std::chrono::steady_clock> lastupdate;
+
+    void internalSetScreenArea(const Scalar& left, const Scalar& top, const Scalar& right, const Scalar& bottom) {
+        screenAreaTopLeft = Vector3(
+            clamp(min(left, right), 0, 10000),
+            clamp(min(top, bottom), 0, 10000),
+            0L
+        );
+        screenAreaBottomRight = Vector3(
+            clamp(max(left, right), 0, 10000),
+            clamp(max(top, bottom), 0, 10000),
+            0L
+        );
+        screenAreaSize = screenAreaBottomRight - screenAreaTopLeft;
+    }
 public:
     bool mouseEnabled;
+
+    void setScreenArea(const Scalar& left, const Scalar& top, const Scalar& right, const Scalar& bottom) {
+        internalSetScreenArea(left, top, right, bottom);
+        std::cout << "Screen area set to " << screenAreaTopLeft << " and " << screenAreaBottomRight << std::endl;
+    }
+
+    void getScreenArea(Vector3& topLeft, Vector3& bottomRight) const {
+        topLeft = screenAreaTopLeft;
+        bottomRight = screenAreaBottomRight;
+    }
 
     void getCalibrationVectors(Vector3& x, Vector3& y) const {
         x = calmatX;
@@ -265,9 +305,32 @@ public:
                 ).undivide();
                 mid.values[2] = 1;
 
+                const Vector3 relCoord(
+                    calmatX.dot(mid) / 10000L,
+                    calmatY.dot(mid) / 10000L,
+                    0L
+                );
+
+                const Vector3 screenCoord = 
+                    (screenAreaTopLeft + (screenAreaSize * relCoord));
+
+                const Vector3 screenCoordClamped = Vector3(
+                    clamp(
+                        screenCoord.values[0], 
+                        screenAreaTopLeft.values[0], 
+                        screenAreaBottomRight.values[0]
+                    ),
+                    clamp(
+                        screenCoord.values[1], 
+                        screenAreaTopLeft.values[1], 
+                        screenAreaBottomRight.values[1]
+                    ),
+                    0L
+                ).undivide();
+
                 vmouse.move(
-                    clamp(calmatX.dot(mid).undivide().value, 0, 10000),
-                    clamp(calmatY.dot(mid).undivide().value, 0, 10000)
+                    screenCoordClamped.values[0].value,
+                    screenCoordClamped.values[1].value
                 );
                 vmouse.setButtonPressed(0, wiimote->buttonStates.a);
                 vmouse.setButtonPressed(2, wiimote->buttonStates.b);
@@ -287,6 +350,10 @@ public:
         std::fill(irSpots, irSpots + 4, INVALID_IR);
         calmatX = Vector3(Scalar(-10000, 1024), 0, 10000).redivide(100);
         calmatY = Vector3(0, Scalar(10000, 1024), 0).redivide(100);
+
+        internalSetScreenArea(
+            0, 0, 10000, 10000
+        );
     }
 };
 
@@ -348,10 +415,24 @@ int main(int argc, char* argv[]) {
         wmouse.getCalibrationVectors(defX, defY);
         config.provideDefault("calmatX", vector3ToString(defX));
         config.provideDefault("calmatY", vector3ToString(defY));
+        config.provideDefault(
+            "screen_top_left",
+            vector3ToString(Vector3(0, 0, 0))
+        );
+        config.provideDefault(
+            "screen_bottom_right",
+            vector3ToString(Vector3(10000, 10000, 0))
+        );
     }
     wmouse.setCalibrationVectors(
         config.vectorOptions["calmatX"],
         config.vectorOptions["calmatY"]
+    );
+    wmouse.setScreenArea(
+        config.vectorOptions["screen_top_left"].values[0],
+        config.vectorOptions["screen_top_left"].values[1],
+        config.vectorOptions["screen_bottom_right"].values[0],
+        config.vectorOptions["screen_bottom_right"].values[1]
     );
     std::cout << "Mouse driver started!" << std::endl;
     signal(SIGINT, signalHandler);
@@ -361,8 +442,14 @@ int main(int argc, char* argv[]) {
     while (!interuptMainLoop) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         wmouse.process();
+        std::string eventResultBuffer;
         csocket.processEvents(
-            [&wmouse, &config](const std::string& command, const std::vector<std::string>& parameters) {
+            [&wmouse, &config, &eventResultBuffer](const std::string& command, const std::vector<std::string>& parameters) {
+                //std::cout << "Command: " << command << std::endl;
+                //for (const std::string& p : parameters) {
+                //    std::cout << "Parameter: " << p << std::endl;
+                //}
+
                 if (command == "mouse") {
                     if (parameters.size() == 1) {
                         if (parameters[0] == "on") {
@@ -401,6 +488,48 @@ int main(int argc, char* argv[]) {
                         config.vectorOptions["calmatY"] = y;
                         config.writeConfigFile();
                         return "OK";
+                    }
+                }
+                if (command == "getscreenarea100") {
+                    Vector3 topLeft, bottomRight;
+                    wmouse.getScreenArea(topLeft, bottomRight);
+                    topLeft = topLeft.redivide(100);
+                    bottomRight = bottomRight.redivide(100);
+
+                    std::stringstream ss;
+                    ss << "OK" 
+                        << ":" << topLeft.values[0].value 
+                        << ":" << topLeft.values[1].value 
+                        << ":" << bottomRight.values[0].value
+                        << ":" << bottomRight.values[1].value;
+                    eventResultBuffer = ss.str();
+                    return eventResultBuffer.c_str();
+                }
+                if (command == "screenarea100") {
+                    if (parameters.size() == 4) {
+                        Scalar top, left, bottom, right;
+                        try {
+                            left = Scalar(std::stoll(parameters[0]), 100);
+                            top = Scalar(std::stoll(parameters[1]), 100);
+                            right = Scalar(std::stoll(parameters[2]), 100);
+                            bottom = Scalar(std::stoll(parameters[3]), 100);
+                        } 
+                        catch (std::invalid_argument& e) {
+                            return "ERROR:Invalid parameter";
+                        }
+                        catch (std::out_of_range& e) {
+                            return "ERROR:Invalid parameter";
+                        } 
+                        wmouse.setScreenArea(left, top, right, bottom);
+
+                        Vector3 topLeft, bottomRight;
+                        wmouse.getScreenArea(topLeft, bottomRight);
+                        config.vectorOptions["screen_top_left"] = topLeft;
+                        config.vectorOptions["screen_bottom_right"] = bottomRight;
+                        config.writeConfigFile();
+                        return "OK";
+                    } else {
+                        return "ERROR:Invalid parameter";
                     }
                 }
                 return "ERROR:Invalid command";
