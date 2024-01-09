@@ -39,6 +39,30 @@ static int64_t isqrt(int64_t x) {
     return result;
 }
 
+static int64_t int64log(int64_t value, int64_t base) {
+    int64_t powers[64];
+
+    int power = 0;
+    int64_t current = base;
+    while (current <= value) {
+        powers[power] = current;
+        current *= current;
+        power++;
+    }
+
+    int64_t result = 0;
+    current = 1;
+    for (power--; power >= 0; power--) {
+        if (powers[power] * current <= value) {
+            current *= powers[power];
+            result += 1 << power;
+        }
+    }
+
+    return result;
+}
+
+
 struct Scalar {
     int64_t value;
     int64_t divisor;
@@ -124,6 +148,10 @@ struct Scalar {
     Scalar& operator/=(const Scalar& o) {
         *this = *this / o;
         return *this;
+    }
+
+    int64_t logWithBase(int64_t base) const {
+        return int64log(value, base) - int64log(divisor, base);
     }
 
     Scalar redivide(int64_t newDivisor) const {

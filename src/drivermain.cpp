@@ -9,6 +9,7 @@
 #include <exception>
 
 #include <csignal>
+#include <cmath>
 
 #include <xwiimote.h>
 
@@ -176,12 +177,150 @@ public:
     }
 };
 
+class WiiMouseProcessingModule {
+public:
+    static const int MAX_BUTTONS = 128;
+protected:
+    void copyFromPrev(const WiiMouseProcessingModule& prev) {
+        deltaT = prev.deltaT;
+        std::copy(
+            prev.pressedButtons, 
+            prev.pressedButtons + MAX_BUTTONS, 
+            pressedButtons
+        );
+        nValidIrSpots = prev.nValidIrSpots;
+        std::copy(
+            prev.trackingDots, 
+            prev.trackingDots + 4, 
+            trackingDots
+        );
+        accelVector = prev.accelVector;
+    }
+public:
+    int deltaT; // milli seconds
+
+    int pressedButtons[MAX_BUTTONS];
+
+    int nValidIrSpots;
+    Vector3 trackingDots[4];
+    Vector3 accelVector;
+
+    virtual void process(const WiiMouseProcessingModule& prev) = 0;
+};
+
+class WMPDummy : public WiiMouseProcessingModule {
+public:
+    virtual void process(const WiiMouseProcessingModule& prev) override {
+        copyFromPrev(prev);
+    }
+};
+
+class WMPSmoother : public WiiMouseProcessingModule {
+private:
+    int deltaTRemainder;
+
+    Scalar positionMixFactor; // influence factor after 1 second
+    Scalar accelMixFactor;  // influence factor after 1 second
+
+    Scalar positionMixFactor10ms;
+    Scalar accelMixFactor10ms;
+
+    bool hasAccel;
+    Vector3 lastAccel;
+
+    bool hasPosition;
+    Vector3 lastPositions[4];
+
+    void update10msFactors() {
+        {
+            double f = (double) positionMixFactor.value / (double) positionMixFactor10ms.divisor;
+            f = pow(f, 0.01);
+            positionMixFactor10ms = Scalar((int64_t) (f * 1000000), 1000000);
+        }
+
+        {
+            double f = (double) accelMixFactor.value / (double) accelMixFactor10ms.divisor;
+            f = pow(f, 0.01);
+            accelMixFactor10ms = Scalar((int64_t) (f * 1000000), 1000000);
+        }
+    }
+public:
+    Scalar getPositionMixFactor() const {
+        return positionMixFactor;
+    }
+
+    Scalar getAccelMixFactor() const {
+        return accelMixFactor;
+    }
+
+    void setPositionMixFactor(const Scalar& f) {
+        positionMixFactor = f;
+        update10msFactors();
+    }
+
+    void setAccelMixFactor(const Scalar& f) {
+        accelMixFactor = f;
+        update10msFactors();
+    }
+
+    virtual void process(const WiiMouseProcessingModule& prev) override {
+        copyFromPrev(prev);
+
+        if (prev.nValidIrSpots == 0) {
+            hasPosition = false;
+        }
+
+        deltaTRemainder += prev.deltaT;
+        while (deltaTRemainder > 10) {
+            deltaTRemainder -= 10;
+
+            if (hasPosition) {
+                for (int i = 0; i < 4; i++) {
+                    trackingDots[i] = lastPositions[i] = (
+                        (trackingDots[i] * (-positionMixFactor10ms + 1)).redivide(100) + 
+                        (lastPositions[i] * positionMixFactor10ms).redivide(100)
+                    );
+                }
+            }
+
+            if (hasAccel) {
+                accelVector = lastAccel = (
+                    (accelVector * (-accelMixFactor10ms + 1)).redivide(100) + 
+                    (lastAccel * accelMixFactor10ms).redivide(100)
+                );
+            }
+        }
+
+        if (!hasAccel) {
+            lastAccel = prev.accelVector;
+            hasAccel = true;
+        }
+        if (!hasPosition) {
+            if (prev.nValidIrSpots > 0) {
+                std::copy(
+                    prev.trackingDots, 
+                    prev.trackingDots + 4, 
+                    lastPositions
+                );
+                hasPosition = true;
+            }
+        }
+    }
+
+    WMPSmoother() : 
+        positionMixFactor(1),
+        accelMixFactor(1) 
+    {
+        deltaTRemainder = 0;
+        hasAccel = false;
+        hasPosition = false;
+    }
+};
+
 class WiiMouse {
 private:
     Xwiimote::Ptr wiimote;
     VirtualMouse vmouse;
-
-    Vector3 smoothCoord;
 
     IRData irSpots[4];
     IrSpotClustering irSpotClustering;
@@ -196,6 +335,12 @@ private:
     Vector3 wiimoteMouseMatY;
 
     std::chrono::time_point<std::chrono::steady_clock> lastupdate;
+
+    WMPDummy processingStart;
+    WMPSmoother smoother;
+    WMPDummy processingEnd;
+
+    std::vector<WiiMouseProcessingModule*> processorSequence;
 
     void computeMouseMat() {
         Vector3 screenAreaSize = screenAreaBottomRight - screenAreaTopLeft;
@@ -222,6 +367,16 @@ private:
             0L
         );
         computeMouseMat();
+    }
+
+    void runProcessing() {
+        WiiMouseProcessingModule* prev = nullptr;
+        for (WiiMouseProcessingModule* module : processorSequence) {
+            if (prev) {
+                module->process(*prev);
+            }
+            prev = module;
+        }
     }
 public:
     bool mouseEnabled;
@@ -286,26 +441,6 @@ public:
         wiimote->poll();
 
         Vector3 accelVector = Vector3(wiimote->accelX, wiimote->accelY, wiimote->accelZ);
-        if (accelVector.len() > 0) {
-            accelVector = accelVector / accelVector.len();
-
-            accelVector.redivide(10000);
-
-            Vector3 newCoord(
-                clamp(accelVector.values[0].value, -5000, 5000), 
-                clamp(accelVector.values[1].value, -5000, 5000), 
-                0
-            );
-
-            if (smoothCoord.len().value == 0L) {
-                smoothCoord = newCoord.redivide(100);
-            } else {
-                smoothCoord = (
-                    smoothCoord * Scalar(90, 100) + 
-                    newCoord * Scalar(10, 100)
-                ).redivide(100);
-            }
-        }
 
         {
             IRData r;
@@ -322,11 +457,22 @@ public:
             irSpotClustering.processIrSpots(irSpots);
         }
 
+        processingStart.accelVector = accelVector;
+        processingStart.nValidIrSpots = irSpotClustering.valid ? 2 : 0;
+        processingStart.trackingDots[0] = irSpotClustering.leftPoint;
+        processingStart.trackingDots[1] = irSpotClustering.rightPoint;
+        processingStart.deltaT = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - lastupdate
+        ).count();
+        runProcessing();
+
         if (mouseEnabled) {
-            if (irSpotClustering.valid) {
-                Vector3 mid = (
-                    (irSpotClustering.leftPoint + irSpotClustering.rightPoint) / 2
-                ).undivide();
+            if (processingEnd.nValidIrSpots > 0) {
+                Vector3 mid = Vector3();
+                for (int i = 0; i < processingEnd.nValidIrSpots; i++) {
+                    mid = mid + processingEnd.trackingDots[i];
+                }
+                mid = mid.undivide() / processingEnd.nValidIrSpots;
                 mid.values[2] = 1;
 
                 const Vector3 mouseCoord = Vector3(
@@ -369,6 +515,13 @@ public:
         internalSetScreenArea(
             0, 0, 10000, 10000
         );
+
+        smoother.setPositionMixFactor(Scalar(90, 100));
+        smoother.setAccelMixFactor(Scalar(75, 100));
+
+        processorSequence.push_back(&processingStart);
+        processorSequence.push_back(&smoother);
+        processorSequence.push_back(&processingEnd);
     }
 };
 
