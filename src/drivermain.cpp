@@ -28,6 +28,14 @@ Scalar clamp(Scalar v, Scalar min, Scalar max) {
     return (v < min) ? min : ((v > max) ? max : v);
 }
 
+Vector3 clamp(Vector3 v, Scalar min, Scalar max) {
+    return Vector3(
+        clamp(v.values[0], min, max),
+        clamp(v.values[1], min, max),
+        clamp(v.values[2], min, max)
+    );
+}
+
 Scalar min(Scalar a, Scalar b) {
     return (a < b) ? a : b;
 }
@@ -183,9 +191,24 @@ private:
 
     Vector3 screenAreaTopLeft;
     Vector3 screenAreaBottomRight;
-    Vector3 screenAreaSize;
+
+    Vector3 wiimoteMouseMatX;
+    Vector3 wiimoteMouseMatY;
 
     std::chrono::time_point<std::chrono::steady_clock> lastupdate;
+
+    void computeMouseMat() {
+        Vector3 screenAreaSize = screenAreaBottomRight - screenAreaTopLeft;
+
+        wiimoteMouseMatX = calmatX * (screenAreaSize.values[0] / 10000L);
+        wiimoteMouseMatY = calmatY * (screenAreaSize.values[1] / 10000L);
+
+        wiimoteMouseMatX.values[2] += screenAreaTopLeft.values[0];
+        wiimoteMouseMatY.values[2] += screenAreaTopLeft.values[1];
+
+        wiimoteMouseMatX = wiimoteMouseMatX.redivide(100);
+        wiimoteMouseMatY = wiimoteMouseMatY.redivide(100);
+    }
 
     void internalSetScreenArea(const Scalar& left, const Scalar& top, const Scalar& right, const Scalar& bottom) {
         screenAreaTopLeft = Vector3(
@@ -198,7 +221,7 @@ private:
             clamp(max(top, bottom), 0, 10000),
             0L
         );
-        screenAreaSize = screenAreaBottomRight - screenAreaTopLeft;
+        computeMouseMat();
     }
 public:
     bool mouseEnabled;
@@ -219,9 +242,10 @@ public:
     }
 
     void setCalibrationVectors(const Vector3& x, const Vector3& y) {
-        std::cout << "Calibration vectors set to " << x << " and " << y << std::endl;
         calmatX = x.redivide(100);
         calmatY = y.redivide(100);
+        computeMouseMat();
+        std::cout << "Calibration vectors set to " << calmatX << " and " << calmatY << std::endl;
     }
 
     Scalar getIrSpotDistance() const {
@@ -305,32 +329,23 @@ public:
                 ).undivide();
                 mid.values[2] = 1;
 
-                const Vector3 relCoord(
-                    calmatX.dot(mid) / 10000L,
-                    calmatY.dot(mid) / 10000L,
+                const Vector3 mouseCoord = Vector3(
+                    clamp(
+                        mid.dot(wiimoteMouseMatX),
+                        screenAreaTopLeft.values[0],
+                        screenAreaBottomRight.values[0]
+                    ).undivide(),
+                    clamp(
+                        mid.dot(wiimoteMouseMatY),
+                        screenAreaTopLeft.values[1],
+                        screenAreaBottomRight.values[1]
+                    ).undivide(),
                     0L
                 );
 
-                const Vector3 screenCoord = 
-                    (screenAreaTopLeft + (screenAreaSize * relCoord));
-
-                const Vector3 screenCoordClamped = Vector3(
-                    clamp(
-                        screenCoord.values[0], 
-                        screenAreaTopLeft.values[0], 
-                        screenAreaBottomRight.values[0]
-                    ),
-                    clamp(
-                        screenCoord.values[1], 
-                        screenAreaTopLeft.values[1], 
-                        screenAreaBottomRight.values[1]
-                    ),
-                    0L
-                ).undivide();
-
                 vmouse.move(
-                    screenCoordClamped.values[0].value,
-                    screenCoordClamped.values[1].value
+                    mouseCoord.values[0].value,
+                    mouseCoord.values[1].value
                 );
                 vmouse.setButtonPressed(0, wiimote->buttonStates.a);
                 vmouse.setButtonPressed(2, wiimote->buttonStates.b);

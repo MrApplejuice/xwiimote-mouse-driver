@@ -106,6 +106,26 @@ struct Scalar {
         }
     }
 
+    Scalar& operator+=(const Scalar& o) {
+        *this = *this + o;
+        return *this;
+    }
+
+    Scalar& operator-=(const Scalar& o) {
+        *this = *this - o;
+        return *this;
+    }
+
+    Scalar& operator*=(const Scalar& o) {
+        *this = *this * o;
+        return *this;
+    }
+
+    Scalar& operator/=(const Scalar& o) {
+        *this = *this / o;
+        return *this;
+    }
+
     Scalar redivide(int64_t newDivisor) const {
         return Scalar(
             value * newDivisor / divisor,
