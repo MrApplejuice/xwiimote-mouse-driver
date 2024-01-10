@@ -1,7 +1,7 @@
 #include <iostream>
 #include <string>
 
-#include "virtualmouse.hpp"
+#include "../driver/virtualmouse.hpp"
 
 int main() {
     try {

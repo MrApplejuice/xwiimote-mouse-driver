@@ -21,13 +21,17 @@ pkg_search_module(
 )
 
 # test applications
-add_executable(mouse-test src/mouse-test.cpp src/virtualmouse.hpp)
+add_executable(
+    mouse-test
+        src/testapps/mouse-test.cpp
+        src/driver/virtualmouse.hpp
+)
 target_link_libraries(mouse-test PkgConfig::evdev PkgConfig::xwiimote)
 
-add_executable(xwiimote-test src/xwiimote-test.cpp)
+add_executable(xwiimote-test src/testapps/xwiimote-test.cpp)
 target_link_libraries(xwiimote-test PkgConfig::evdev PkgConfig::xwiimote)
 
-add_executable(test-maths src/testmaths.cpp src/intlinalg.hpp)
+add_executable(test-maths src/testapps/testmaths.cpp src/driver/intlinalg.hpp)
 
 # Actual mouse driver
 ExternalProject_Add(
@@ -43,19 +47,19 @@ ExternalProject_Add_StepTargets(sockpp install)
 
 add_executable(
     xwiimote-mouse-driver 
-        src/drivermain.cpp
-        src/base.hpp
-        src/virtualmouse.hpp
-        src/intlinalg.hpp
-        src/controlsocket.hpp
-        src/controlsocket.cpp
-        src/device.hpp
-        src/device.cpp
-        src/settings.hpp
-        src/settings.cpp
-        src/stringtools.hpp
-        src/stringtools.cpp
-        src/driveroptparse.hpp
+        src/driver/drivermain.cpp
+        src/driver/base.hpp
+        src/driver/virtualmouse.hpp
+        src/driver/intlinalg.hpp
+        src/driver/controlsocket.hpp
+        src/driver/controlsocket.cpp
+        src/driver/device.hpp
+        src/driver/device.cpp
+        src/driver/settings.hpp
+        src/driver/settings.cpp
+        src/driver/stringtools.hpp
+        src/driver/stringtools.cpp
+        src/driver/driveroptparse.hpp
 )
 add_dependencies(xwiimote-mouse-driver sockpp-install)
 target_include_directories(

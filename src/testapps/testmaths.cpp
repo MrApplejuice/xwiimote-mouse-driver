@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "intlinalg.hpp"
+#include "../driver/intlinalg.hpp"
 
 int main() {
     Vector3 v1(1, 1, 1, 10);

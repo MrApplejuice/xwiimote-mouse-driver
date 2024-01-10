@@ -3,7 +3,7 @@
 
 #include <xwiimote.h>
 
-#include "base.hpp"
+#include "../driver/base.hpp"
 
 int main() {
     try {
