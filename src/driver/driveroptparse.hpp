@@ -1,3 +1,19 @@
+/*
+This file is part of xwiimote-mouse-driver.
+
+Foobar is free software: you can redistribute it and/or modify it under 
+the terms of the GNU General Public License as published by the Free 
+Software Foundation, either version 3 of the License, or (at your option) 
+any later version.
+
+Foobar is distributed in the hope that it will be useful, but WITHOUT 
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with 
+Foobar. If not, see <https://www.gnu.org/licenses/>. 
+*/
+
 #pragma once
 
 #include <iostream>
@@ -46,6 +62,7 @@ const static char* VALID_COMMANDLINE_OPTIONS[] = {
     "socket-path",
     "config-file",
     "help",
+    "version",
     nullptr
 };
 
@@ -55,12 +72,46 @@ const static char* COMMANDLINE_OPTIONS_WITH_ARG[] = {
     nullptr
 };
 
+static const std::string HELP_TEXT = 
+R"(Usage: xwiimote-mouse-driver [options]
+Options:
+    --socket-path=<path>  Path to the control socket
+    --config-file=<path>  Path to the config file
+    --help                Print this help message
+    --version             Print the version number
+)";
+
 static void printHelp() {
-    std::cout << "Usage: xwiimote-mouse-driver [options]" << std::endl;
-    std::cout << "Options:" << std::endl;
-    std::cout << "  --socket-path=<path>  Path to the control socket" << std::endl;
-    std::cout << "  --config-file=<path>  Path to the config file" << std::endl;
-    std::cout << "  --help                Print this help message" << std::endl;
+    std::cout << HELP_TEXT << std::endl;
+}
+
+
+static const std::string VERSION_STRING = "0.1";
+static const std::string VERSION_TEXT =
+R"(xwiimote-mouse-driver ##VERSION_STRING##
+
+xwiimote-mouse-driver is a user-space mouse driver that allows using a wiimote
+as a mouse on a desktop computer.
+
+Copyright (C) 2024  Paul Konstantin Gerke
+
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+)";
+
+static void printVersion() {
+    std::cout << replaceAll(VERSION_TEXT, "##VERSION_STRING##", VERSION_STRING) << std::endl;
 }
 
 static OptionsMap parseOptions(int argc, char* argv[]) {

@@ -18,9 +18,34 @@ More evdev documents:
 - python demo project: https://github.com/alex-s-v/10moons-driver
 - Someone wrote an audio driver in C#: https://github.com/trigger-segfault/WiimoteLib.Net/tree/master
 
+# License
+
+xwiimote-mouse-driver is a user-space mouse driver that allows using a wiimote
+as a mouse on a desktop computer.
+
+Copyright (C) 2024  Paul Konstantin Gerke
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+
 # Build requirements
 
-- libevdev (version 1.12 or higher) development files
+- libevdev (version 1.12 or higher) development files 
+    - See https://www.freedesktop.org/wiki/Software/libevdev/
+    - License: MIT
 - libxwiimote development files
+    - See https://github.com/xwiimote/xwiimote
+    - License: Custom XWiimote License  
 - cmake
 - pkgconfig
