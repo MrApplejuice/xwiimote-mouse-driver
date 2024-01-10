@@ -50,6 +50,7 @@ add_executable(
         src/controlsocket.hpp
         src/controlsocket.cpp
         src/device.hpp
+        src/device.cpp
         src/settings.hpp
         src/settings.cpp
         src/stringtools.hpp

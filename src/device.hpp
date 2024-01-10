@@ -16,51 +16,31 @@
 
 #include "base.hpp"
 
-std::ostream& operator<<(std::ostream& out, const xwii_event_abs& abs) {
-    out << "x:" << abs.x << " y:" << abs.y;
-    return out;
-}
+std::ostream& operator<<(std::ostream& out, const xwii_event_abs& abs);
 
 class DevFailed : public std::exception {};
 class DevInitFailed : public DevFailed {};
 
+enum class WiimoteButton {
+    A, B, Plus, Minus, Home, One, Two, Up, Down, Left, Right, COUNT
+};
+
+extern std::map<int, WiimoteButton> XWIIMOTE_BUTTON_MAP;
+extern std::map<WiimoteButton, std::string> WIIMOTE_BUTTON_NAMES;
+
 struct WiimoteButtonStates {
-    bool a, b, plus, minus, home, one, two, up, down, left, right;
+    bool pressedButtons[(int) WiimoteButton::COUNT];
+
+    bool isPressed(WiimoteButton button) const {
+        return pressedButtons[(int) button];
+    }
 
     std::string toMsgState() const {
-        std::string result = "";
-        if (a) {
-            result += ":a";
-        }
-        if (b) {
-            result += ":b";
-        }
-        if (plus) {
-            result += ":+";
-        }
-        if (minus) {
-            result += ":-";
-        }
-        if (home) {
-            result += ":h";
-        }
-        if (one) {
-            result += ":1";
-        }
-        if (two) {
-            result += ":2";
-        }
-        if (up) {
-            result += ":u";
-        }
-        if (down) {
-            result += ":d";
-        }
-        if (left) {
-            result += ":l";
-        }
-        if (right) {
-            result += ":r";
+        std::string result;
+        for (int i = 0; i < (int) WiimoteButton::COUNT; i++) {
+            if (pressedButtons[i]) {
+                result += ":" + WIIMOTE_BUTTON_NAMES[(WiimoteButton) i];
+            }
         }
         if (result.size()) {
             result = result.substr(1);
@@ -69,19 +49,12 @@ struct WiimoteButtonStates {
     }
 
     bool operator==(const WiimoteButtonStates& other) const {
-        return (
-            (a == other.a) &&
-            (b == other.b) &&
-            (plus == other.plus) &&
-            (minus == other.minus) &&
-            (home == other.home) &&
-            (one == other.one) &&
-            (two == other.two) &&
-            (up == other.up) &&
-            (down == other.down) &&
-            (left == other.left) &&
-            (right == other.right)
-        );
+        for (int i = 0; i < (int) WiimoteButton::COUNT; i++) {
+            if (pressedButtons[i] != other.pressedButtons[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     bool operator!=(const WiimoteButtonStates& other) const {
@@ -89,7 +62,7 @@ struct WiimoteButtonStates {
     }
 
     WiimoteButtonStates() {
-        a = b = plus = minus = home = one = two = up = down = left = right = false;
+        std::fill(pressedButtons, pressedButtons + (int) WiimoteButton::COUNT, false);
     }
 };
 
@@ -141,28 +114,9 @@ public:
             } else if (ev.type == XWII_EVENT_IR) {
                 std::copy(ev.v.abs, ev.v.abs + 4, irdata);
             } else if (ev.type == XWII_EVENT_KEY) {
-                if (ev.v.key.code == XWII_KEY_A) {
-                    buttonStates.a = ev.v.key.state && true;
-                } else if (ev.v.key.code == XWII_KEY_B) {
-                    buttonStates.b = ev.v.key.state && true;
-                } else if (ev.v.key.code == XWII_KEY_PLUS) {
-                    buttonStates.plus = ev.v.key.state && true;
-                } else if (ev.v.key.code == XWII_KEY_MINUS) {
-                    buttonStates.minus = ev.v.key.state && true;
-                } else if (ev.v.key.code == XWII_KEY_HOME) {
-                    buttonStates.home = ev.v.key.state && true;
-                } else if (ev.v.key.code == XWII_KEY_ONE) {
-                    buttonStates.one = ev.v.key.state && true;
-                } else if (ev.v.key.code == XWII_KEY_TWO) {
-                    buttonStates.two = ev.v.key.state && true;
-                } else if (ev.v.key.code == XWII_KEY_UP) {
-                    buttonStates.up = ev.v.key.state && true;
-                } else if (ev.v.key.code == XWII_KEY_DOWN) {
-                    buttonStates.down = ev.v.key.state && true;
-                } else if (ev.v.key.code == XWII_KEY_LEFT) {
-                    buttonStates.left = ev.v.key.state && true;
-                } else if (ev.v.key.code == XWII_KEY_RIGHT) {
-                    buttonStates.right = ev.v.key.state && true;
+                auto found = XWIIMOTE_BUTTON_MAP.find(ev.v.key.code);
+                if (found != XWIIMOTE_BUTTON_MAP.end()) {
+                    buttonStates.pressedButtons[(int) found->second] = ev.v.key.state && true;
                 }
             }
         }

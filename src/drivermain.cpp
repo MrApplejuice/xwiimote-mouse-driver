@@ -493,8 +493,8 @@ public:
                     mouseCoord.values[0].value,
                     mouseCoord.values[1].value
                 );
-                vmouse.setButtonPressed(0, wiimote->buttonStates.a);
-                vmouse.setButtonPressed(2, wiimote->buttonStates.b);
+                vmouse.setButtonPressed(0, wiimote->buttonStates.isPressed(WiimoteButton::A));
+                vmouse.setButtonPressed(2, wiimote->buttonStates.isPressed(WiimoteButton::B));
             } else {
                 vmouse.setButtonPressed(0, false);
                 vmouse.setButtonPressed(2, false);
