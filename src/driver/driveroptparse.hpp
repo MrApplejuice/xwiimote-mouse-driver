@@ -93,8 +93,8 @@ R"(xwiimote-mouse-driver ##VERSION_STRING##
 xwiimote-mouse-driver is a user-space mouse driver that allows using a wiimote
 as a mouse on a desktop computer.
 
-Copyright (C) 2024  Paul Konstantin Gerke
 
+Copyright (C) 2024  Paul Konstantin Gerke
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
