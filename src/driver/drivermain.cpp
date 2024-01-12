@@ -119,53 +119,19 @@ public:
 
 class WMPSmoother : public WiiMouseProcessingModule {
 private:
-    int deltaTRemainder;
-
-    Scalar positionMixFactor; // influence factor after 1 second
-    Scalar accelMixFactor;  // influence factor after 1 second
-
-    Scalar positionMixFactor10ms, oneMinusPositionMixFactor10ms;
-    Scalar accelMixFactor10ms, oneMinusAccelMixFactor10ms;
-
     bool hasAccel;
     Vector3 lastAccel;
 
     bool hasPosition;
     Vector3 lastPositions[4];
-
-    void update10msFactors() {
-        {
-            double f = (double) positionMixFactor.value / (double) positionMixFactor10ms.divisor;
-            f = pow(f, 0.01);
-            positionMixFactor10ms = Scalar((int64_t) (f * 1000000), 1000000);
-            oneMinusPositionMixFactor10ms = Scalar(1) - positionMixFactor10ms;
-        }
-
-        {
-            double f = (double) accelMixFactor.value / (double) accelMixFactor10ms.divisor;
-            f = pow(f, 0.01);
-            accelMixFactor10ms = Scalar((int64_t) (f * 1000000), 1000000);
-            oneMinusPositionMixFactor10ms = Scalar(1) - positionMixFactor10ms;
-        }
-    }
 public:
-    Scalar getPositionMixFactor() const {
-        return positionMixFactor;
-    }
+    bool enabled;
 
-    Scalar getAccelMixFactor() const {
-        return accelMixFactor;
-    }
-
-    void setPositionMixFactor(const Scalar& f) {
-        positionMixFactor = f;
-        update10msFactors();
-    }
-
-    void setAccelMixFactor(const Scalar& f) {
-        accelMixFactor = f;
-        update10msFactors();
-    }
+    // influence of old values after 1 second
+    float positionMixFactor; 
+    float accelMixFactor; 
+    float positionMixFactorClicked;
+    float accelMixFactorClicked;
 
     virtual void process(const WiiMouseProcessingModule& prev) override {
         copyFromPrev(prev);
@@ -174,25 +140,33 @@ public:
             hasPosition = false;
         }
 
-        deltaTRemainder += prev.deltaT;
-        while (deltaTRemainder > 10) {
-            deltaTRemainder -= 10;
+        float posMix, accelMix;
 
-            if (hasPosition) {
-                for (int i = 0; i < 4; i++) {
-                    trackingDots[i] = lastPositions[i] = (
-                        (trackingDots[i] * oneMinusPositionMixFactor10ms).redivide(100) + 
-                        (lastPositions[i] * positionMixFactor10ms).redivide(100)
-                    );
-                }
-            }
+        if (isButtonPressed(ButtonNamespace::VMOUSE, 0) 
+            || isButtonPressed(ButtonNamespace::VMOUSE, 1) 
+            || isButtonPressed(ButtonNamespace::VMOUSE, 2)
+        ) {
+            posMix = pow(positionMixFactorClicked, deltaT / 1000.0f);
+            accelMix = pow(accelMixFactorClicked, deltaT / 1000.0f);
+        } else {
+            posMix = pow(positionMixFactor, deltaT / 1000.0f);
+            accelMix = pow(accelMixFactor, deltaT / 1000.0f);
+        }
 
-            if (hasAccel) {
-                accelVector = lastAccel = (
-                    (accelVector * oneMinusAccelMixFactor10ms).redivide(100) + 
-                    (lastAccel * accelMixFactor10ms).redivide(100)
+        if (hasPosition && enabled) {
+            for (int i = 0; i < 4; i++) {
+                trackingDots[i] = lastPositions[i] = (
+                    (trackingDots[i] * Scalar(1.0f - posMix, 1000000)).redivide(100) + 
+                    (lastPositions[i] * Scalar(posMix, 1000000)).redivide(100)
                 );
             }
+        }
+
+        if (hasAccel && enabled) {
+            accelVector = lastAccel = (
+                (accelVector * Scalar(1.0f - accelMix, 1000000)).redivide(100) +
+                (lastAccel * Scalar(accelMix, 1000000)).redivide(100)
+            );
         }
 
         if (!hasAccel) {
@@ -215,9 +189,14 @@ public:
         positionMixFactor(1),
         accelMixFactor(1) 
     {
-        deltaTRemainder = 0;
+        enabled = true;
         hasAccel = false;
         hasPosition = false;
+
+        positionMixFactor = 0.0f;
+        accelMixFactor = 0.2f;
+        positionMixFactorClicked = 0.5f;
+        accelMixFactorClicked = 0.2f;
     }
 };
 
@@ -250,8 +229,8 @@ private:
     void computeMouseMat() {
         Vector3 screenAreaSize = screenAreaBottomRight - screenAreaTopLeft;
 
-        wiimoteMouseMatX = calmatX * (screenAreaSize.values[0] / 10000L);
-        wiimoteMouseMatY = calmatY * (screenAreaSize.values[1] / 10000L);
+        wiimoteMouseMatX = calmatX * Scalar(screenAreaSize.values[0] / 10000L, 1000000);
+        wiimoteMouseMatY = calmatY * Scalar(screenAreaSize.values[1] / 10000L, 1000000);
 
         wiimoteMouseMatX.values[2] += screenAreaTopLeft.values[0];
         wiimoteMouseMatY.values[2] += screenAreaTopLeft.values[1];
@@ -430,9 +409,6 @@ public:
         internalSetScreenArea(
             0, 0, 10000, 10000
         );
-
-        smoother.setPositionMixFactor(Scalar(90, 100));
-        smoother.setAccelMixFactor(Scalar(75, 100));
 
         buttonMapper.addMapping(WiimoteButton::A, 0);
         buttonMapper.addMapping(WiimoteButton::B, 2);

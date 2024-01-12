@@ -16,6 +16,7 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
+#include <cassert>
 #include <stdint.h>
 
 #include <iostream>
@@ -80,6 +81,17 @@ static int64_t int64log(int64_t value, int64_t base) {
 
 
 struct Scalar {
+private:
+    void initFromTwoInts(int64_t _value, int64_t _divisor) {
+        if (_divisor == 0) {
+            throw DivisionByZeroError();
+        }
+        assert(_divisor > 0);
+
+        value = _value;
+        divisor = _divisor;
+    }
+public:
     int64_t value;
     int64_t divisor;
 
@@ -173,12 +185,16 @@ struct Scalar {
     Scalar redivide(int64_t newDivisor) const {
         return Scalar(
             value * newDivisor / divisor,
-            abs(newDivisor)
+            (int64_t) abs(newDivisor)
         );
     }
 
     Scalar undivide() const {
         return redivide(1L);
+    }
+
+    float toFloat() const {
+        return ((float) value) / ((float) divisor);
     }
 
     Scalar& operator=(const Scalar& other) {
@@ -213,14 +229,45 @@ struct Scalar {
     }
 
     Scalar(int64_t _value, int64_t _divisor) {
-        value = _value;
-        divisor = _divisor;
-        if (_divisor == 0) {
-            throw DivisionByZeroError();
-        }
+        initFromTwoInts(_value, _divisor);
+    }
+
+    Scalar(int _value, int _divisor) {
+        initFromTwoInts(_value, _divisor);
+    }
+
+    Scalar(long long int _value, long long int _divisor) {
+        initFromTwoInts(_value, _divisor);
+    }
+
+    Scalar(long long int _value, int _divisor) {
+        initFromTwoInts(_value, _divisor);
+    }
+
+    Scalar(float f, int64_t _divisor) {
+        initFromTwoInts((int64_t) (f * _divisor), _divisor);
+    }
+
+    Scalar(float f, int _divisor) {
+        initFromTwoInts((int64_t) (f * _divisor), _divisor);
     }
 };
 
+static inline float operator*(float d, const Scalar& s) {
+    return d * s.toFloat();
+}
+
+static inline float operator*(const Scalar& s, float d) {
+    return d * s.toFloat();
+}
+
+static inline float operator/(float d, const Scalar& s) {
+    return d / s.toFloat();
+}
+
+static inline float operator/(const Scalar& s, float d) {
+    return s.toFloat() / d;
+}
 
 struct Vector3 {
     Scalar values[3];

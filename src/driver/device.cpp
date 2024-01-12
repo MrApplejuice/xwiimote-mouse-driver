@@ -17,17 +17,17 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 #include "device.hpp"
 
 std::map<WiimoteButton, std::string> WIIMOTE_BUTTON_NAMES = {
-    {WiimoteButton::A, "A"},
-    {WiimoteButton::B, "B"},
-    {WiimoteButton::Plus, "Plus"},
-    {WiimoteButton::Minus, "Minus"},
-    {WiimoteButton::Home, "Home"},
-    {WiimoteButton::One, "One"},
-    {WiimoteButton::Two, "Two"},
-    {WiimoteButton::Up, "Up"},
-    {WiimoteButton::Down, "Down"},
-    {WiimoteButton::Left, "Left"},
-    {WiimoteButton::Right, "Right"}
+    {WiimoteButton::A, "a"},
+    {WiimoteButton::B, "b"},
+    {WiimoteButton::Plus, "+"},
+    {WiimoteButton::Minus, "-"},
+    {WiimoteButton::Home, "h"},
+    {WiimoteButton::One, "1"},
+    {WiimoteButton::Two, "2"},
+    {WiimoteButton::Up, "u"},
+    {WiimoteButton::Down, "d"},
+    {WiimoteButton::Left, "l"},
+    {WiimoteButton::Right, "r"}
 };
 
 std::map<int, WiimoteButton> XWIIMOTE_BUTTON_MAP = {

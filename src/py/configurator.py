@@ -182,7 +182,7 @@ class LRCrosses:
 
         for i in range(2):
             x, y = lr_vectors[i] * [self.canvas.winfo_width(), self.canvas.winfo_height()] / 1024
-            self.crosses[i] = draw_cross(self.canvas, x, y)
+            self.crosses[i] = draw_cross(self.canvas, x, self.canvas.winfo_height() - y)
 
 def get_screen_resolution(root):
     screen_width = root.winfo_screenwidth()
