@@ -41,3 +41,36 @@ public:
     IrSpotClustering();
 };
 
+enum class ButtonNamespace {
+    NONE,
+    WII,
+    VMOUSE
+};
+
+struct NamespacedButtonState {
+    static const NamespacedButtonState NONE;
+
+    ButtonNamespace ns;
+    int buttonId;
+    bool state;
+
+    bool matches(const NamespacedButtonState& other) const {
+        return ns == other.ns && buttonId == other.buttonId;
+    }
+
+    operator bool() const {
+        return ns != ButtonNamespace::NONE;
+    }
+
+    bool operator==(const NamespacedButtonState& other) const {
+        return ns == other.ns && buttonId == other.buttonId && state == other.state;
+    }
+
+    NamespacedButtonState(const NamespacedButtonState& other) = default;
+    NamespacedButtonState(
+        ButtonNamespace ns, int buttonId, bool state
+    ) : ns(ns), buttonId(buttonId), state(state) {}
+    NamespacedButtonState() {
+        *this = NONE;
+    }
+};

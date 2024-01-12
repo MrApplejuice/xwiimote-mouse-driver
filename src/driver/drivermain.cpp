@@ -60,11 +60,24 @@ protected:
 public:
     int deltaT; // milli seconds
 
-    int pressedButtons[MAX_BUTTONS];
+    NamespacedButtonState pressedButtons[MAX_BUTTONS];
 
     int nValidIrSpots;
     Vector3 trackingDots[4];
     Vector3 accelVector;
+
+    bool isButtonPressed(ButtonNamespace ns, int buttonId) const {
+        const auto searchFor = NamespacedButtonState(ns, buttonId, false);
+        for (int i = 0; i < MAX_BUTTONS; i++) {
+            if (!pressedButtons[i]) {
+                break;
+            }
+            if (pressedButtons[i].matches(searchFor)) {
+                return pressedButtons[i].state;
+            }
+        }
+        return false;
+    }
 
     virtual void process(const WiiMouseProcessingModule& prev) = 0;
 };
@@ -76,6 +89,34 @@ public:
     }
 };
 
+class WMPButtonMapper : public WiiMouseProcessingModule {
+private:
+    std::map<WiimoteButton, int> wiiToEvdevMap;
+public:
+    void clearMapping() {
+        wiiToEvdevMap.clear();
+    }
+
+    void addMapping(WiimoteButton wiiButton, int evdevButton) {
+        wiiToEvdevMap[wiiButton] = evdevButton;
+    }
+
+    virtual void process(const WiiMouseProcessingModule& prev) override {
+        copyFromPrev(prev);
+
+        int assignedButtons = 0;
+        for (auto mapping : wiiToEvdevMap) {
+            pressedButtons[assignedButtons++] = NamespacedButtonState(
+                ButtonNamespace::VMOUSE, mapping.second, 
+                prev.isButtonPressed(
+                    ButtonNamespace::WII, (int) mapping.first
+                )
+            );
+        }
+        pressedButtons[assignedButtons] = NamespacedButtonState::NONE;
+    }
+};
+
 class WMPSmoother : public WiiMouseProcessingModule {
 private:
     int deltaTRemainder;
@@ -83,8 +124,8 @@ private:
     Scalar positionMixFactor; // influence factor after 1 second
     Scalar accelMixFactor;  // influence factor after 1 second
 
-    Scalar positionMixFactor10ms;
-    Scalar accelMixFactor10ms;
+    Scalar positionMixFactor10ms, oneMinusPositionMixFactor10ms;
+    Scalar accelMixFactor10ms, oneMinusAccelMixFactor10ms;
 
     bool hasAccel;
     Vector3 lastAccel;
@@ -97,12 +138,14 @@ private:
             double f = (double) positionMixFactor.value / (double) positionMixFactor10ms.divisor;
             f = pow(f, 0.01);
             positionMixFactor10ms = Scalar((int64_t) (f * 1000000), 1000000);
+            oneMinusPositionMixFactor10ms = Scalar(1) - positionMixFactor10ms;
         }
 
         {
             double f = (double) accelMixFactor.value / (double) accelMixFactor10ms.divisor;
             f = pow(f, 0.01);
             accelMixFactor10ms = Scalar((int64_t) (f * 1000000), 1000000);
+            oneMinusPositionMixFactor10ms = Scalar(1) - positionMixFactor10ms;
         }
     }
 public:
@@ -138,7 +181,7 @@ public:
             if (hasPosition) {
                 for (int i = 0; i < 4; i++) {
                     trackingDots[i] = lastPositions[i] = (
-                        (trackingDots[i] * (-positionMixFactor10ms + 1)).redivide(100) + 
+                        (trackingDots[i] * oneMinusPositionMixFactor10ms).redivide(100) + 
                         (lastPositions[i] * positionMixFactor10ms).redivide(100)
                     );
                 }
@@ -146,7 +189,7 @@ public:
 
             if (hasAccel) {
                 accelVector = lastAccel = (
-                    (accelVector * (-accelMixFactor10ms + 1)).redivide(100) + 
+                    (accelVector * oneMinusAccelMixFactor10ms).redivide(100) + 
                     (lastAccel * accelMixFactor10ms).redivide(100)
                 );
             }
@@ -198,6 +241,7 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> lastupdate;
 
     WMPDummy processingStart;
+    WMPButtonMapper buttonMapper;
     WMPSmoother smoother;
     WMPDummy processingEnd;
 
@@ -318,13 +362,20 @@ public:
             irSpotClustering.processIrSpots(irSpots);
         }
 
+        processingStart.deltaT = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - lastupdate
+        ).count();
         processingStart.accelVector = accelVector;
         processingStart.nValidIrSpots = irSpotClustering.valid ? 2 : 0;
         processingStart.trackingDots[0] = irSpotClustering.leftPoint;
         processingStart.trackingDots[1] = irSpotClustering.rightPoint;
-        processingStart.deltaT = std::chrono::duration_cast<std::chrono::milliseconds>(
-            now - lastupdate
-        ).count();
+        {
+            for (int bi = 0; bi < (int) WiimoteButton::COUNT; bi++) {
+                processingStart.pressedButtons[bi] = NamespacedButtonState(
+                    ButtonNamespace::WII, bi, wiimote->buttonStates.pressedButtons[bi]
+                );
+            }
+        }
         runProcessing();
 
         if (mouseEnabled) {
@@ -354,10 +405,13 @@ public:
                     mouseCoord.values[0].value,
                     mouseCoord.values[1].value
                 );
-                vmouse.setButtonPressed(0, wiimote->buttonStates.isPressed(WiimoteButton::A));
-                vmouse.setButtonPressed(2, wiimote->buttonStates.isPressed(WiimoteButton::B));
+
+                vmouse.setButtonPressed(0, processingEnd.isButtonPressed(ButtonNamespace::VMOUSE, 0));
+                vmouse.setButtonPressed(1, processingEnd.isButtonPressed(ButtonNamespace::VMOUSE, 1));
+                vmouse.setButtonPressed(2, processingEnd.isButtonPressed(ButtonNamespace::VMOUSE, 2));
             } else {
                 vmouse.setButtonPressed(0, false);
+                vmouse.setButtonPressed(1, false);
                 vmouse.setButtonPressed(2, false);
             }
         }
@@ -380,7 +434,11 @@ public:
         smoother.setPositionMixFactor(Scalar(90, 100));
         smoother.setAccelMixFactor(Scalar(75, 100));
 
+        buttonMapper.addMapping(WiimoteButton::A, 0);
+        buttonMapper.addMapping(WiimoteButton::B, 2);
+
         processorSequence.push_back(&processingStart);
+        processorSequence.push_back(&buttonMapper);
         processorSequence.push_back(&smoother);
         processorSequence.push_back(&processingEnd);
     }

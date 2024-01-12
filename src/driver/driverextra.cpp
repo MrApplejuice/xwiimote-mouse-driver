@@ -127,3 +127,9 @@ void IrSpotClustering :: processIrSpots(const IRData* irSpots) {
 IrSpotClustering :: IrSpotClustering() : defaultDistance(300) {
     valid = false;
 }
+
+const NamespacedButtonState NamespacedButtonState :: NONE {
+    ButtonNamespace::NONE,
+    0,
+    false
+};
