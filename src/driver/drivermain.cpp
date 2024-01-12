@@ -124,6 +124,9 @@ private:
 
     bool hasPosition;
     Vector3 lastPositions[4];
+
+    bool buttonWasPressed;
+    float clickReleaseTimer;
 public:
     bool enabled;
 
@@ -132,6 +135,8 @@ public:
     float accelMixFactor; 
     float positionMixFactorClicked;
     float accelMixFactorClicked;
+    float clickReleaseBlendDelay;
+    float clickReleaseFreezeDelay;
 
     virtual void process(const WiiMouseProcessingModule& prev) override {
         copyFromPrev(prev);
@@ -142,16 +147,42 @@ public:
 
         float posMix, accelMix;
 
-        if (isButtonPressed(ButtonNamespace::VMOUSE, 0) 
+        const bool buttonIsPressed = isButtonPressed(ButtonNamespace::VMOUSE, 0) 
             || isButtonPressed(ButtonNamespace::VMOUSE, 1) 
-            || isButtonPressed(ButtonNamespace::VMOUSE, 2)
-        ) {
-            posMix = pow(positionMixFactorClicked, deltaT / 1000.0f);
+            || isButtonPressed(ButtonNamespace::VMOUSE, 2);
+        
+        clickReleaseTimer = maxf(clickReleaseTimer - deltaT / 1000.0f, 0.0f);
+        if (buttonIsPressed) {
             accelMix = pow(accelMixFactorClicked, deltaT / 1000.0f);
+            if (!buttonWasPressed) {
+                clickReleaseTimer = clickReleaseBlendDelay + clickReleaseFreezeDelay;
+            }
+            clickReleaseTimer = maxf(clickReleaseTimer, clickReleaseBlendDelay);
         } else {
-            posMix = pow(positionMixFactor, deltaT / 1000.0f);
             accelMix = pow(accelMixFactor, deltaT / 1000.0f);
+            clickReleaseTimer = minf(clickReleaseTimer, clickReleaseBlendDelay);
         }
+        buttonWasPressed = buttonIsPressed;
+
+
+        if (clickReleaseTimer <= 0) {
+            posMix = positionMixFactor;
+        } else if (
+            (clickReleaseFreezeDelay > 0) && 
+            (clickReleaseTimer > clickReleaseBlendDelay)
+        ) {
+            posMix = 1;
+        } else if (clickReleaseBlendDelay <= 0) {
+            if (buttonIsPressed) {
+                posMix = positionMixFactorClicked;
+            } else {
+                posMix = positionMixFactor;
+            }
+        } else {
+            const float m = clickReleaseTimer / clickReleaseBlendDelay;
+            posMix = positionMixFactor * (1.0f - m) + positionMixFactorClicked * m;
+        }
+        posMix = pow(posMix, deltaT / 1000.0f);
 
         if (hasPosition && enabled) {
             for (int i = 0; i < 4; i++) {
@@ -185,18 +216,21 @@ public:
         }
     }
 
-    WMPSmoother() : 
-        positionMixFactor(1),
-        accelMixFactor(1) 
-    {
+    WMPSmoother() {
         enabled = true;
         hasAccel = false;
         hasPosition = false;
 
-        positionMixFactor = 0.0f;
+        buttonWasPressed = false;
+        clickReleaseTimer = 0.0f;
+
         accelMixFactor = 0.2f;
-        positionMixFactorClicked = 0.5f;
         accelMixFactorClicked = 0.2f;
+
+        positionMixFactor = 1e-20f;
+        positionMixFactorClicked = 0.1f;
+        clickReleaseBlendDelay = 1.0f;
+        clickReleaseFreezeDelay = 0.2f;
     }
 };
 
@@ -380,14 +414,14 @@ public:
                     0L
                 );
 
+                vmouse.setButtonPressed(0, processingEnd.isButtonPressed(ButtonNamespace::VMOUSE, 0));
+                vmouse.setButtonPressed(1, processingEnd.isButtonPressed(ButtonNamespace::VMOUSE, 1));
+                vmouse.setButtonPressed(2, processingEnd.isButtonPressed(ButtonNamespace::VMOUSE, 2));
+
                 vmouse.move(
                     mouseCoord.values[0].value,
                     mouseCoord.values[1].value
                 );
-
-                vmouse.setButtonPressed(0, processingEnd.isButtonPressed(ButtonNamespace::VMOUSE, 0));
-                vmouse.setButtonPressed(1, processingEnd.isButtonPressed(ButtonNamespace::VMOUSE, 1));
-                vmouse.setButtonPressed(2, processingEnd.isButtonPressed(ButtonNamespace::VMOUSE, 2));
             } else {
                 vmouse.setButtonPressed(0, false);
                 vmouse.setButtonPressed(1, false);

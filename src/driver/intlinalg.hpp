@@ -409,6 +409,14 @@ static Scalar max(Scalar a, Scalar b) {
     return (a > b) ? a : b;
 }
 
+static float maxf(float a, float b) {
+    return (a > b) ? a : b;
+}
+
+static float minf(float a, float b) {
+    return (a < b) ? a : b;
+}
+
 static std::ostream& operator<<(std::ostream& out, const Scalar& s) {
     out << s.value << "/" << s.divisor;
     return out;
