@@ -307,13 +307,15 @@ class Window:
         self.bottom_entry = tk.Entry(screen_area_box, width=5, textvariable=self.screen_area_text_values[3])
         self.bottom_entry.grid(row=3, column=1)
 
-
         notebook.pack(fill=tk.BOTH, expand=True)
 
 class Logic:
     def __init__(self, win: Window, wiimote: WiimoteSocketReader):
         self.win = win
         self.wiimote = wiimote
+
+    def on_wii_button_pressed(self, button_name: str):
+        pass
 
     def start(self):
         pass
@@ -326,6 +328,17 @@ class Logic:
 
 
 class IdleLogic(Logic):
+    on_start_calibration = None
+    on_toggle_mouse = None
+
+    def on_wii_button_pressed(self, button_name: str):
+        if button_name == "1":
+            if self.on_start_calibration:
+                self.on_start_calibration()
+        if button_name == "2":
+            if self.on_toggle_mouse:
+                self.on_toggle_mouse()
+
     def process_socket_data(self):
         if self.wiimote.lr_vectors is None:
             self.win.canvas.config(bg="red")
@@ -363,9 +376,15 @@ class CalibrationLogic(Logic):
     ]
 
     def start(self):
-        self.btn_was_pressed = False
         self.step_data = []
         self.win.btn_start_calibration.config(highlightcolor="blue", highlightthickness=5)
+
+    def on_wii_button_pressed(self, button_name: str):
+        if button_name == "a":
+            self.step_data.append(self.wiimote.lr_vectors)
+        if button_name == "b":
+            if self.on_exit:
+                self.on_exit()
 
     def process_socket_data(self):
         self.win.text_box.config(text=self.STEPS[len(self.step_data)])
@@ -375,14 +394,6 @@ class CalibrationLogic(Logic):
             if self.on_exit:
                 self.on_exit()
             return
-
-        if not self.btn_was_pressed:
-            if "a" in self.wiimote.pressed_buttons:
-                self.step_data.append(self.wiimote.lr_vectors)
-            elif "b" in self.wiimote.pressed_buttons:
-                if self.on_exit:
-                    self.on_exit()
-        self.btn_was_pressed = bool(len(self.wiimote.pressed_buttons))
 
         if self.wiimote.lr_vectors is None:
             self.win.canvas.config(bg="red")
@@ -414,13 +425,22 @@ def main():
     root = tk.Tk()
     root.title("Wiimote mouse configurator")
 
+    current_logic = None
+
     window = Window(root)
     root.geometry("600x400")
 
+    last_pressed_buttons = []
     def new_socket_data():
-        nonlocal current_logic
+        nonlocal current_logic, last_pressed_buttons
 
         current_logic.process_socket_data()
+
+        if current_logic:
+            for b_name in wiimote.pressed_buttons:
+                if b_name not in last_pressed_buttons:
+                    current_logic.on_wii_button_pressed(b_name)
+        last_pressed_buttons = tuple(wiimote.pressed_buttons)
 
     wiimote = WiimoteSocketReader(args.socket_path, root, new_socket_data)
     wiimote.send_message("mouse", "off")
@@ -473,6 +493,9 @@ def main():
         wiimote.send_message("cal100", *int64_calmat.flatten().tolist())
 
     def on_start_calibration():
+        wiimote.send_message("mouse", "off")
+        window.btn_enable_mouse.config(relief=tk.RAISED)
+
         calibration_logic = CalibrationLogic(window, wiimote)
         calibration_logic.on_exit = lambda: switch_logic(idle_logic)
         calibration_logic.on_completed = lambda: send_calibration_data(calibration_logic)
@@ -480,6 +503,7 @@ def main():
         switch_logic(calibration_logic)
 
     window.btn_start_calibration.config(command=on_start_calibration)
+    idle_logic.on_start_calibration = on_start_calibration
 
     def on_screen_area_updated(values):
         wiimote.send_message("screenarea100", *[v * 10000 for v in values])
@@ -497,6 +521,7 @@ def main():
             window.btn_enable_mouse.config(relief=tk.RAISED)
 
     window.btn_enable_mouse.config(command=toggle_mouse_activated)
+    idle_logic.on_toggle_mouse = toggle_mouse_activated
 
     try:
         root.mainloop()
