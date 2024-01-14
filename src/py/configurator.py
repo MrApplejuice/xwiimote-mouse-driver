@@ -18,6 +18,7 @@ from typing import Any, Tuple
 import ctypes
 import ctypes.util
 import tkinter as tk
+from tkinter import ttk
 import socket
 from dataclasses import dataclass
 
@@ -181,8 +182,18 @@ class LRCrosses:
             return
 
         for i in range(2):
-            x, y = lr_vectors[i] * [self.canvas.winfo_width(), self.canvas.winfo_height()] / 1024
-            self.crosses[i] = draw_cross(self.canvas, x, self.canvas.winfo_height() - y)
+            # [1024, 768] seems to be the (logical) measured size of the 
+            # wiimote sensor, actually measured was 760 vertical. 
+            # Not strictly needed here, but makes for a nicer
+            # visualization
+            x, y = (
+                lr_vectors[i] * 
+                [self.canvas.winfo_width(), self.canvas.winfo_height()] 
+                / [1024, 768]
+            )
+            self.crosses[i] = draw_cross(
+                self.canvas, x, self.canvas.winfo_height() - y
+            )
 
 def get_screen_resolution(root):
     screen_width = root.winfo_screenwidth()
@@ -214,12 +225,54 @@ class Window:
     def __init__(self, root: tk.Tk):
         self.root = root
 
-        main_frame = tk.Frame(root)
+        notebook = ttk.Notebook(root)
+
+        main_frame = tk.Frame(notebook)
         main_frame.pack()
+        notebook.add(main_frame, text="Calibration")
+
+        # Frame for IR canvas and buttons
+        calibration_frame = tk.Frame(main_frame)
+        calibration_frame.pack(fill=tk.BOTH, expand=True)
+
+        # "IR canvas"
+        ir_frame = tk.Frame(calibration_frame)
+        ir_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
+
+        self.canvas = canvas = tk.Canvas(
+            ir_frame, 
+            width=400,
+            height=400 * 768 // 1024
+        )
+        canvas.config(bg="gray")
+        canvas.pack()
+        self.crosses = LRCrosses(canvas)
+
+        # Add text box
+        self.text_box = text_box = tk.Label(
+            ir_frame, justify=tk.CENTER, font=("Arial", 12, "italic")
+        )
+        text_box.config(text="...", wraplength=400)
+        text_box.pack()
+
+        # Add buttons
+        button_frame = tk.Frame(calibration_frame)
+        button_frame.pack(pady=10)
+
+        button1 = tk.Button(button_frame, text="Start calibration (1)")
+        button1.pack(side=tk.TOP, fill=tk.X)
+        self.btn_start_calibration = button1
+
+        button2 = tk.Button(button_frame, text="Enable mouse (2)")
+        button2.pack(side=tk.TOP, fill=tk.X)
+        self.btn_enable_mouse = button2
+
+        button3 = tk.Button(button_frame, text="Help")
+        button3.pack(side=tk.TOP, fill=tk.X)
 
         # Screen subregion controls
-        self.screen_area_box = screen_area_box = tk.Frame(main_frame)
-        screen_area_box.pack()
+        self.screen_area_box = screen_area_box = tk.Frame(calibration_frame)
+        screen_area_box.pack(side=tk.TOP, pady=20)
 
         # Add label
         label = tk.Label(screen_area_box, text="Configure screen subregion")
@@ -254,39 +307,8 @@ class Window:
         self.bottom_entry = tk.Entry(screen_area_box, width=5, textvariable=self.screen_area_text_values[3])
         self.bottom_entry.grid(row=3, column=1)
 
-        # "IR canvas"
-        self.canvas = canvas = tk.Canvas(main_frame, width=400, height=400)
-        canvas.pack()
-        canvas.config(bg="gray")
-        self.crosses = LRCrosses(canvas)
 
-        # Add text box
-        self.text_box = text_box = tk.Label(main_frame, justify=tk.CENTER, font=("Arial", 12, "italic"))
-        text_box.config(text="...", wraplength=400)
-        text_box.pack()
-
-        # Add space
-        space_frame = tk.Frame(main_frame, height=10)
-        space_frame.pack()    
-
-        # Add buttons
-        button_frame = tk.Frame(main_frame)
-
-        button1 = tk.Button(button_frame, text="Start calibration")
-        button1.pack(side=tk.LEFT) 
-        self.btn_start_calibration = button1
-
-        button2 = tk.Button(button_frame, text="Button 2")
-        button2.pack(side=tk.LEFT)
-
-        button3 = tk.Button(button_frame, text="Button 3")
-        button3.pack(side=tk.LEFT)
-
-        button_frame.pack(side=tk.BOTTOM)
-
-        screen_width, screen_height = get_screen_resolution(root)
-        print(f"Screen resolution: {screen_width}x{screen_height}")
-
+        notebook.pack(fill=tk.BOTH, expand=True)
 
 class Logic:
     def __init__(self, win: Window, wiimote: WiimoteSocketReader):
@@ -393,7 +415,7 @@ def main():
     root.title("Wiimote mouse configurator")
 
     window = Window(root)
-    root.geometry("800x600")
+    root.geometry("600x400")
 
     def new_socket_data():
         nonlocal current_logic
@@ -463,6 +485,18 @@ def main():
         wiimote.send_message("screenarea100", *[v * 10000 for v in values])
 
     window.on_screen_area_updated = on_screen_area_updated
+
+    def toggle_mouse_activated():
+        new_pressed_state = window.btn_enable_mouse["relief"] == tk.RAISED
+
+        if new_pressed_state:
+            wiimote.send_message("mouse", "on")
+            window.btn_enable_mouse.config(relief=tk.SUNKEN)
+        else:
+            wiimote.send_message("mouse", "off")
+            window.btn_enable_mouse.config(relief=tk.RAISED)
+
+    window.btn_enable_mouse.config(command=toggle_mouse_activated)
 
     try:
         root.mainloop()

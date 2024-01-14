@@ -230,7 +230,7 @@ public:
         positionMixFactor = 1e-20f;
         positionMixFactorClicked = 0.1f;
         clickReleaseBlendDelay = 1.0f;
-        clickReleaseFreezeDelay = 0.2f;
+        clickReleaseFreezeDelay = 0.25f;
     }
 };
 
