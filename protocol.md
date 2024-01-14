@@ -17,7 +17,8 @@ All messages from driver to client or vice versa have the following format:
   the event type. Example: `message[:value][:value]...`. `message` is the event
   type and all subsequent `:`-separated values are message-specific parameters.
 - Requests sent by a client to the server are always acknowledged either by:
-    - A (literal) `OK` answer
+    - A (literal) `OK[:parameter][:parameter]...` answer, possibly including
+      parameter relating to the client inquery.
     - An error message of the form `ERROR[:message]`. The `:message` part is 
       a readable errors message and is optional.
 
@@ -62,3 +63,18 @@ ir-coordinates. Also, it is possible that the lx,ly and rx,ry pairs are equal
 to each other, most typically when only one dot was detected by the wiimote.
 The pair `lx`, `ly` and `rx`, `ry` designate the x/y coordinates of the left and
 right side of the detected wii sensor bar, respectively.
+
+## `SERVER b`
+
+## `SERVER OK`
+
+## `SERVER ERROR`
+
+## `CLIENT mouse`
+
+## `CLIENT cal100`
+
+## `CLIENT getscreenarea100`
+
+## `CLIENT screenarea100`
+
