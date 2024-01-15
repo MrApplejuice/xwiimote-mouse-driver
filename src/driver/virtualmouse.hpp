@@ -18,6 +18,8 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 
 #include <algorithm>
 #include <exception>
+#include <vector>
+#include <string>
 
 #include <libevdev/libevdev-uinput.h>
 
@@ -25,6 +27,15 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 
 class VirtualMouseError : public std::exception {};
 class VirtualMouseInvalidArgumentError : public VirtualMouseError {};
+
+struct SupportedButton {
+    int code;
+    const char* rawKeyName;
+    const char* name;
+    const char* category;
+};
+
+extern const std::vector<SupportedButton> SUPPORTED_BUTTONS;
 
 struct VirtualMouse {
     libevdev* dev;

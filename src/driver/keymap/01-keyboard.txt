@@ -1,0 +1,102 @@
+#define KEY_ESC			1		Escape
+#define KEY_ENTER		28		Enter
+#define KEY_1			2		1
+#define KEY_2			3		2
+#define KEY_3			4		3
+#define KEY_4			5		4
+#define KEY_5			6		5
+#define KEY_6			7		6
+#define KEY_7			8		7
+#define KEY_8			9		8
+#define KEY_9			10		9
+#define KEY_0			11		0
+#define KEY_MINUS		12		-
+#define KEY_EQUAL		13		=
+#define KEY_BACKSPACE		14		Backspace
+#define KEY_TAB			15		Tab
+#define KEY_Q			16		Q
+#define KEY_W			17		W
+#define KEY_E			18		E
+#define KEY_R			19		R
+#define KEY_T			20		T
+#define KEY_Y			21		Y
+#define KEY_U			22		U
+#define KEY_I			23		I
+#define KEY_O			24		O
+#define KEY_P			25		P
+#define KEY_LEFTBRACE		26		[
+#define KEY_RIGHTBRACE		27		]
+#define KEY_A			30		A
+#define KEY_S			31		S
+#define KEY_D			32		D
+#define KEY_F			33		F
+#define KEY_G			34		G
+#define KEY_H			35		H
+#define KEY_J			36		J
+#define KEY_K			37		K
+#define KEY_L			38		L
+#define KEY_SEMICOLON		39		;
+#define KEY_APOSTROPHE		40		'
+#define KEY_GRAVE		41		`
+#define KEY_BACKSLASH		43		\\
+#define KEY_Z			44		Z
+#define KEY_X			45		X
+#define KEY_C			46		C
+#define KEY_V			47		V
+#define KEY_B			48		B
+#define KEY_N			49		N
+#define KEY_M			50		M
+#define KEY_COMMA		51		,
+#define KEY_DOT			52		.
+#define KEY_SLASH		53		/
+#define KEY_SPACE		57		Space
+#define KEY_F1			59		F1
+#define KEY_F2			60		F2
+#define KEY_F3			61		F3
+#define KEY_F4			62		F4
+#define KEY_F5			63		F5
+#define KEY_F6			64		F6
+#define KEY_F7			65		F7
+#define KEY_F8			66		F8
+#define KEY_F9			67		F9
+#define KEY_F10			68		F10
+#define KEY_F11			87		F11
+#define KEY_F12			88		F12
+#define KEY_LEFTALT		56		Left Alt
+#define KEY_LEFTSHIFT		42		Left Shift
+#define KEY_LEFTCTRL		29		Left Control
+#define KEY_LEFTMETA		125		Left Meta
+#define KEY_RIGHTSHIFT		54		Right Shift
+#define KEY_RIGHTALT		100		Right Alt
+#define KEY_RIGHTCTRL		97		Right Control
+#define KEY_RIGHTMETA		126		Right Meta
+#define KEY_CAPSLOCK		58		Caps Lock
+#define KEY_NUMLOCK		69		Numlock
+#define KEY_SCROLLLOCK		70		Scrollock
+#define KEY_KPASTERISK		55		Keypad *
+#define KEY_KP1			79		Keypad 1
+#define KEY_KP2			80		Keypad 2
+#define KEY_KP3			81		Keypad 3
+#define KEY_KP4			75		Keypad 4
+#define KEY_KP5			76		Keypad 5
+#define KEY_KP6			77		Keypad 6
+#define KEY_KP7			71		Keypad 7
+#define KEY_KP8			72		Keypad 8
+#define KEY_KP9			73		Keypad 9
+#define KEY_KP0			82		Keypad 0
+#define KEY_KPPLUS		78		Keypad +
+#define KEY_KPMINUS		74		Keypad -
+#define KEY_KPDOT		83		Keypad .
+#define KEY_KPENTER		96		Keypad Enter
+#define KEY_KPSLASH		98		Keypad /
+#define KEY_SYSRQ		99		Sys Rq
+#define KEY_INSERT		110		Insert
+#define KEY_DELETE		111		Delete
+#define KEY_HOME		102		Home
+#define KEY_END			107		End
+#define KEY_PAGEUP		104		Page Up
+#define KEY_PAGEDOWN		109		Page Down
+#define KEY_LEFT		105		Left
+#define KEY_RIGHT		106		Right
+#define KEY_UP			103		Up
+#define KEY_DOWN		108		Down

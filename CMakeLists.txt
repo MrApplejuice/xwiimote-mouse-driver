@@ -25,6 +25,7 @@ add_executable(
     mouse-test
         src/testapps/mouse-test.cpp
         src/driver/virtualmouse.hpp
+        src/driver/virtualmouse.cpp
 )
 target_link_libraries(mouse-test PkgConfig::evdev PkgConfig::xwiimote)
 
@@ -50,6 +51,7 @@ add_executable(
         src/driver/drivermain.cpp
         src/driver/base.hpp
         src/driver/virtualmouse.hpp
+        src/driver/virtualmouse.cpp
         src/driver/intlinalg.hpp
         src/driver/controlsocket.hpp
         src/driver/controlsocket.cpp
