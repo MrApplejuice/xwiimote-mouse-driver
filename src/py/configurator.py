@@ -29,6 +29,7 @@ import argparse
 _libc_path = ctypes.util.find_library("c")
 _libc = ctypes.CDLL(_libc_path)
 
+
 def fflush(file):
     libc = ctypes.CDLL(ctypes.util.find_library("c"))
     libc.fflush(file)
@@ -40,6 +41,7 @@ class OpenCommand:
     params: Tuple[Any]
     sock: socket.socket
     callback: Any = None
+
 
 class WiimoteSocketReader:
     MAX_CLOSED_COMMANDS = 128
@@ -70,18 +72,16 @@ class WiimoteSocketReader:
             if message_parts[1] == "invalid":
                 self.lr_vectors = None
             else:
-                self.lr_vectors = np.array(
-                    [int(x) for x in message_parts[1:]]
-                ).reshape((2, 2))
+                self.lr_vectors = np.array([int(x) for x in message_parts[1:]]).reshape(
+                    (2, 2)
+                )
         elif message_parts[0] == "ir":
             index = int(message_parts[1])
             valid = bool(int(message_parts[2]))
             if not valid:
                 self.ir_vectors[index] = None
             else:
-                self.ir_vectors[index] = np.array(
-                    [int(x) for x in message_parts[3:5]]
-                )
+                self.ir_vectors[index] = np.array([int(x) for x in message_parts[3:5]])
         elif message_parts[0] == "b":
             self.pressed_buttons = [m for m in message_parts[1:] if m]
         else:
@@ -92,9 +92,7 @@ class WiimoteSocketReader:
         req_sock.connect(self.socket_path)
         req_sock.settimeout(0.1)
 
-        self.open_commands.append(
-            OpenCommand(name, params, req_sock, callback)
-        )
+        self.open_commands.append(OpenCommand(name, params, req_sock, callback))
 
         data = (":".join([name] + [str(x) for x in params]) + "\n").encode()
         padding = b"\0" * 1024
@@ -140,7 +138,7 @@ class WiimoteSocketReader:
                 print(f"Error reading response for: {cmd.name}: {e}")
 
         self.open_commands.clear()
-        self.closed_commands = self.closed_commands[-self.MAX_CLOSED_COMMANDS:]
+        self.closed_commands = self.closed_commands[-self.MAX_CLOSED_COMMANDS :]
 
     def process(self):
         try:
@@ -160,11 +158,13 @@ class WiimoteSocketReader:
                 cmd.sock.close()
             self.open_commands.clear()
 
+
 def draw_cross(canvas, x, y) -> Tuple[int, int]:
     return (
-        canvas.create_line(x-10, y, x+10, y, width=2),
-        canvas.create_line(x, y-10, x, y+10, width=2),
+        canvas.create_line(x - 10, y, x + 10, y, width=2),
+        canvas.create_line(x, y - 10, x, y + 10, width=2),
     )
+
 
 class LRCrosses:
     def __init__(self, canvas):
@@ -182,18 +182,17 @@ class LRCrosses:
             return
 
         for i in range(2):
-            # [1024, 768] seems to be the (logical) measured size of the 
-            # wiimote sensor, actually measured was 760 vertical. 
+            # [1024, 768] seems to be the (logical) measured size of the
+            # wiimote sensor, actually measured was 760 vertical.
             # Not strictly needed here, but makes for a nicer
             # visualization
             x, y = (
-                lr_vectors[i] * 
-                [self.canvas.winfo_width(), self.canvas.winfo_height()] 
+                lr_vectors[i]
+                * [self.canvas.winfo_width(), self.canvas.winfo_height()]
                 / [1024, 768]
             )
-            self.crosses[i] = draw_cross(
-                self.canvas, x, self.canvas.winfo_height() - y
-            )
+            self.crosses[i] = draw_cross(self.canvas, x, self.canvas.winfo_height() - y)
+
 
 def get_screen_resolution(root):
     screen_width = root.winfo_screenwidth()
@@ -215,9 +214,9 @@ class Window:
                 self.screen_area_box.config(bg="red")
                 return
             values.append(value)
-            
+
         self.screen_area_box.config(bg=self.root.cget("bg"))
-        
+
         self.screen_area_values = tuple(values)
         if self.on_screen_area_updated:
             self.on_screen_area_updated(self.screen_area_values)
@@ -239,11 +238,7 @@ class Window:
         ir_frame = tk.Frame(calibration_frame)
         ir_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
 
-        self.canvas = canvas = tk.Canvas(
-            ir_frame, 
-            width=400,
-            height=400 * 768 // 1024
-        )
+        self.canvas = canvas = tk.Canvas(ir_frame, width=400, height=400 * 768 // 1024)
         canvas.config(bg="gray")
         canvas.pack()
         self.crosses = LRCrosses(canvas)
@@ -281,33 +276,41 @@ class Window:
         # Left edit box
         self.screen_area_text_values = [
             tk.StringVar(),
-            tk.StringVar(), 
+            tk.StringVar(),
             tk.StringVar(),
             tk.StringVar(),
         ]
         for i, v in enumerate(self.screen_area_values):
             self.screen_area_text_values[i].set(str(v) + "%")
             self.screen_area_text_values[i].trace_add(
-                "write",
-                lambda *args: self.parse_screen_area_values()
+                "write", lambda *args: self.parse_screen_area_values()
             )
-        
-        left_entry = tk.Entry(screen_area_box, width=5, textvariable=self.screen_area_text_values[0])
+
+        left_entry = tk.Entry(
+            screen_area_box, width=5, textvariable=self.screen_area_text_values[0]
+        )
         left_entry.grid(row=2, column=0)
 
         # Right edit box
-        self.right_entry = tk.Entry(screen_area_box, width=5, textvariable=self.screen_area_text_values[2])
+        self.right_entry = tk.Entry(
+            screen_area_box, width=5, textvariable=self.screen_area_text_values[2]
+        )
         self.right_entry.grid(row=2, column=2)
 
         # Top edit box
-        self.top_entry = tk.Entry(screen_area_box, width=5, textvariable=self.screen_area_text_values[1])
+        self.top_entry = tk.Entry(
+            screen_area_box, width=5, textvariable=self.screen_area_text_values[1]
+        )
         self.top_entry.grid(row=1, column=1)
 
         # Bottom edit box
-        self.bottom_entry = tk.Entry(screen_area_box, width=5, textvariable=self.screen_area_text_values[3])
+        self.bottom_entry = tk.Entry(
+            screen_area_box, width=5, textvariable=self.screen_area_text_values[3]
+        )
         self.bottom_entry.grid(row=3, column=1)
 
         notebook.pack(fill=tk.BOTH, expand=True)
+
 
 class Logic:
     def __init__(self, win: Window, wiimote: WiimoteSocketReader):
@@ -377,7 +380,9 @@ class CalibrationLogic(Logic):
 
     def start(self):
         self.step_data = []
-        self.win.btn_start_calibration.config(highlightcolor="blue", highlightthickness=5)
+        self.win.btn_start_calibration.config(
+            highlightcolor="blue", highlightthickness=5
+        )
 
     def on_wii_button_pressed(self, button_name: str):
         if button_name == "a":
@@ -424,6 +429,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """.lstrip()
 
+
 def main():
     parser = argparse.ArgumentParser(
         prog="Wiimote mouse configurator",
@@ -450,6 +456,7 @@ def main():
     root.geometry("600x400")
 
     last_pressed_buttons = []
+
     def new_socket_data():
         nonlocal current_logic, last_pressed_buttons
 
@@ -486,25 +493,23 @@ def main():
 
     def on_close():
         switch_logic(ClosingLogic(window, wiimote))
-    
+
     root.protocol("WM_DELETE_WINDOW", on_close)
 
     def send_calibration_data(calibration_logic):
         data = calibration_logic.step_data[1:5]
 
-        wii_corners = [
-            np.mean(d, axis=0) for d in data
-        ]
-        wii_corner_mat = np.hstack(
-            [wii_corners, np.ones([4, 1])]
-        )
+        wii_corners = [np.mean(d, axis=0) for d in data]
+        wii_corner_mat = np.hstack([wii_corners, np.ones([4, 1])])
 
-        corners = np.array([
-            [0, 0],
-            [10000, 0],
-            [0, 10000],
-            [10000, 10000],
-        ])
+        corners = np.array(
+            [
+                [0, 0],
+                [10000, 0],
+                [0, 10000],
+                [10000, 10000],
+            ]
+        )
 
         calmat, _, __, ___ = np.linalg.lstsq(wii_corner_mat, corners, rcond=None)
 
@@ -517,7 +522,9 @@ def main():
 
         calibration_logic = CalibrationLogic(window, wiimote)
         calibration_logic.on_exit = lambda: switch_logic(idle_logic)
-        calibration_logic.on_completed = lambda: send_calibration_data(calibration_logic)
+        calibration_logic.on_completed = lambda: send_calibration_data(
+            calibration_logic
+        )
 
         switch_logic(calibration_logic)
 
@@ -546,6 +553,7 @@ def main():
         root.mainloop()
     finally:
         wiimote.close()
+
 
 if __name__ == "__main__":
     main()
