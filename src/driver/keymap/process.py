@@ -45,7 +45,7 @@ def keymap_to_py(filename: Path):
 
         splits = line.split("\t")
         keyname, code = splits[:2]
-        readable_name = "nullptr"
+        readable_name = "None"
         if len(splits) > 2:
             readable_name = f'"{splits[2]}"'
 
