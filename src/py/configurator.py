@@ -215,6 +215,42 @@ def parse_color_string(color_str: str) -> Tuple[int, int, int]:
     return r, g, b
 
 
+def embedded_image(decompressed_embedded_image, root_bg_color):
+    img = tk.PhotoImage(
+        width=len(decompressed_embedded_image[0]),
+        height=len(decompressed_embedded_image),
+    )
+
+    try:
+
+        def setalpha(x, y, alpha):
+            img.tk.call(img.name, "transparency", "set", x, y, alpha, "-alpha")
+
+        def to_hexcolor(r, g, b, a):
+            return f"#{r:02x}{g:02x}{b:02x}"
+
+        setalpha(0, 0, 0)
+    except tk.TclError:
+        # We are using a tk version that does not support setting linear alpha
+        # ... we accept this and use binary alpha
+        def setalpha(x, y, alpha):
+            img.transparency_set(x, y, alpha <= 0)
+
+        def to_hexcolor(r, g, b, a):
+            blend_value = sum(root_bg_color) // len(root_bg_color) * (255 - a)
+            r = (r * a + blend_value) // 255
+            g = (g * a + blend_value) // 255
+            b = (b * a + blend_value) // 255
+            return f"#{r:02x}{g:02x}{b:02x}"
+
+    for y, row in enumerate(decompressed_embedded_image):
+        for x, pixel in enumerate(row):
+            img.put(to_hexcolor(*pixel), (x, y))
+            setalpha(x, y, pixel[3])
+
+    return img
+
+
 class Window:
     on_screen_area_updated = None
 
@@ -335,38 +371,8 @@ class Window:
         key_canvas = tk.Canvas(keybindings_main)
         key_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
 
-        img = tk.PhotoImage(width=len(WIIMOTE_IMG[0]), height=len(WIIMOTE_IMG))
+        img = embedded_image(WIIMOTE_IMG, root_background_color)
         self.refs.append(img)
-
-        try:
-
-            def setalpha(x, y, alpha):
-                img.tk.call(img.name, "transparency", "set", x, y, alpha, "-alpha")
-
-            def to_hexcolor(r, g, b, a):
-                return f"#{r:02x}{g:02x}{b:02x}"
-
-            setalpha(0, 0, 0)
-        except tk.TclError:
-            # We are using a tk version that does not support setting linear alpha
-            # ... we accept this and use binary alpha
-            def setalpha(x, y, alpha):
-                img.tk.call(img.name, "transparency", "set", x, y, alpha <= 0)
-
-            def to_hexcolor(r, g, b, a):
-                blend_value = (
-                    sum(root_background_color) // len(root_background_color) * (255 - a)
-                )
-                r = (r * a + blend_value) // 255
-                g = (g * a + blend_value) // 255
-                b = (b * a + blend_value) // 255
-                return f"#{r:02x}{g:02x}{b:02x}"
-
-        for y, row in enumerate(WIIMOTE_IMG):
-            for x, pixel in enumerate(row):
-                img.put(to_hexcolor(*pixel), (x, y))
-                setalpha(x, y, pixel[3])
-
         key_canvas.create_image(0, 0, anchor=tk.NW, image=img)
 
 
