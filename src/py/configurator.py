@@ -755,6 +755,7 @@ def main():
 def decompress_embedded_image(data):
     rle_data = lzma.decompress(base64.b85decode(data.strip().encode("ascii")))
     width, height, ncolors = struct.unpack("<HHH", rle_data[:6])
+    offset = struct.calcsize("<HHH")
 
     sample_unpack_str = "B" * ncolors
     sample_size = struct.calcsize("<" + sample_unpack_str)
@@ -762,7 +763,6 @@ def decompress_embedded_image(data):
     flat_image_data = []
 
     backrefs = []
-    offset = 6
     while offset < len(rle_data):
         (reps,) = struct.unpack_from("<l", rle_data, offset)
         offset += 4
