@@ -441,6 +441,14 @@ public:
         }
         runProcessing();
 
+        for (auto button : processingEnd.pressedButtons) {
+            if (!button) {
+                break;
+            }
+            if (button.ns == ButtonNamespace::VMOUSE) {
+                vmouse.button(button.buttonId, button.state && mouseEnabled);
+            }
+        }
         if (mouseEnabled) {
             if (processingEnd.nValidIrSpots > 0) {
                 Vector3 mid = Vector3();
@@ -469,14 +477,6 @@ public:
                     mouseCoord.values[1].value
                 );
             } 
-        }
-        for (auto button : processingEnd.pressedButtons) {
-            if (!button) {
-                break;
-            }
-            if (button.ns == ButtonNamespace::VMOUSE) {
-                vmouse.button(button.buttonId, button.state && mouseEnabled);
-            }
         }
 
         lastupdate = now;
