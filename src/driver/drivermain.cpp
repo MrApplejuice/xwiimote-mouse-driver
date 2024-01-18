@@ -40,7 +40,7 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 
 class WiiMouseProcessingModule {
 public:
-    static const int MAX_BUTTONS = 128;
+    static const int MAX_BUTTONS = 32;
 protected:
     void copyFromPrev(const WiiMouseProcessingModule& prev) {
         deltaT = prev.deltaT;
@@ -91,29 +91,67 @@ public:
 
 class WMPButtonMapper : public WiiMouseProcessingModule {
 private:
-    std::map<WiimoteButton, int> wiiToEvdevMap;
+    std::map<WiimoteButton, std::vector<int>> wiiToEvdevMap;
 public:
     void clearMapping() {
         wiiToEvdevMap.clear();
     }
 
     void addMapping(WiimoteButton wiiButton, int evdevButton) {
-        wiiToEvdevMap[wiiButton] = evdevButton;
+        auto& v = wiiToEvdevMap[wiiButton];
+        if (std::find(v.begin(), v.end(), evdevButton) != v.end()) {
+            return;
+        }
+        v.push_back(evdevButton);
     }
 
     virtual void process(const WiiMouseProcessingModule& prev) override {
         copyFromPrev(prev);
 
-        int assignedButtons = 0;
-        for (auto mapping : wiiToEvdevMap) {
-            pressedButtons[assignedButtons++] = NamespacedButtonState(
-                ButtonNamespace::VMOUSE, mapping.second, 
-                prev.isButtonPressed(
-                    ButtonNamespace::WII, (int) mapping.first
-                )
-            );
+        std::vector<int> lastPressedButtons;
+        for (int i = 0; i < MAX_BUTTONS; i++) {
+            if (!pressedButtons[i]) {
+                break;
+            }
+            if (pressedButtons[i].ns == ButtonNamespace::VMOUSE) {
+                lastPressedButtons.push_back(pressedButtons[i].buttonId);
+            }
         }
-        pressedButtons[assignedButtons] = NamespacedButtonState::NONE;
+
+        int assignedButtons = 0;
+        for (auto& button : prev.pressedButtons) {
+            if (assignedButtons >= MAX_BUTTONS) {
+                break;
+            }
+            if (!button) {
+                break;
+            }
+            if (button.ns == ButtonNamespace::WII) {
+                auto mapping = wiiToEvdevMap.find((WiimoteButton) button.buttonId);
+                if (mapping != wiiToEvdevMap.end()) {
+                    for (int evdevButton : mapping->second) {
+                        if (assignedButtons >= MAX_BUTTONS) {
+                            break;
+                        }
+                        pressedButtons[assignedButtons++] = NamespacedButtonState(
+                            ButtonNamespace::VMOUSE, evdevButton, button.state
+                        );
+                        lastPressedButtons.erase(
+                            std::remove(
+                                lastPressedButtons.begin(),
+                                lastPressedButtons.end(),
+                                evdevButton
+                            ),
+                            lastPressedButtons.end()
+                        );
+                    }
+                }
+            }
+        }
+
+        if (assignedButtons < MAX_BUTTONS) {
+            pressedButtons[assignedButtons++] = NamespacedButtonState::NONE;
+        }
     }
 };
 
@@ -414,18 +452,18 @@ public:
                     0L
                 );
 
-                vmouse.setButtonPressed(0, processingEnd.isButtonPressed(ButtonNamespace::VMOUSE, 0));
-                vmouse.setButtonPressed(1, processingEnd.isButtonPressed(ButtonNamespace::VMOUSE, 1));
-                vmouse.setButtonPressed(2, processingEnd.isButtonPressed(ButtonNamespace::VMOUSE, 2));
-
                 vmouse.move(
                     mouseCoord.values[0].value,
                     mouseCoord.values[1].value
                 );
-            } else {
-                vmouse.setButtonPressed(0, false);
-                vmouse.setButtonPressed(1, false);
-                vmouse.setButtonPressed(2, false);
+            } 
+            for (auto button : processingEnd.pressedButtons) {
+                if (!button) {
+                    break;
+                }
+                if (button.ns == ButtonNamespace::VMOUSE) {
+                    vmouse.button(button.buttonId, button.state);
+                }
             }
         }
 

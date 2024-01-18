@@ -35,11 +35,11 @@ int main() {
 
         mouse.move(500, 50);
 
-        std::cout << "Press enter to perform a right-click!" << std::endl;
+        std::cout << "Press enter to press the A-key!" << std::endl;
         std::getline(std::cin, s);
 
-        mouse.setButtonPressed(2, true);
-        mouse.setButtonPressed(2, false);
+        mouse.button(KEY_A, true);
+        mouse.button(KEY_A, false);
 
         std::cout << "Press enter to quit" << std::endl;
         std::getline(std::cin, s);

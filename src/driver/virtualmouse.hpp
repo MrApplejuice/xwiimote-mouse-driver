@@ -20,10 +20,9 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 #include <exception>
 #include <vector>
 #include <string>
+#include <map>
 
 #include <libevdev/libevdev-uinput.h>
-
-#define VIRTUAL_MOUSE_MAX_BUTTONS 16
 
 class VirtualMouseError : public std::exception {};
 class VirtualMouseInvalidArgumentError : public VirtualMouseError {};
@@ -37,13 +36,13 @@ struct SupportedButton {
 
 extern const std::vector<SupportedButton> SUPPORTED_BUTTONS;
 
+const SupportedButton* findButton(const std::string& rawName);
+
 struct VirtualMouse {
     libevdev* dev;
     libevdev_uinput* uinput;
 
     int maxAbsValue;
-
-    int buttons[VIRTUAL_MOUSE_MAX_BUTTONS];
 
     VirtualMouse(int maxAbsValue) : dev(nullptr), uinput(nullptr), maxAbsValue(maxAbsValue) {
         dev = libevdev_new();
@@ -75,15 +74,7 @@ struct VirtualMouse {
 
         libevdev_enable_event_code(dev, EV_ABS, ABS_Y, &absy_data);
 
-        std::fill(buttons, buttons + VIRTUAL_MOUSE_MAX_BUTTONS, KEY_RESERVED);
-        buttons[0] = BTN_LEFT;
-        buttons[1] = BTN_MIDDLE;
-        buttons[2] = BTN_RIGHT;
-
         libevdev_enable_event_type(dev, EV_KEY);
-        libevdev_enable_event_code(dev, EV_KEY, BTN_LEFT, nullptr);
-        libevdev_enable_event_code(dev, EV_KEY, BTN_RIGHT, nullptr);
-        libevdev_enable_event_code(dev, EV_KEY, BTN_MIDDLE, nullptr);
         libevdev_enable_event_code(dev, EV_KEY, BTN_TOOL_MOUSE, nullptr);
 
         for (auto btn : SUPPORTED_BUTTONS) {
@@ -103,19 +94,15 @@ struct VirtualMouse {
         libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
     }
 
-    void setButtonPressed(int i, bool pressed) {
-        if ((i < 0) || (i >= VIRTUAL_MOUSE_MAX_BUTTONS)) {
-            throw VirtualMouseInvalidArgumentError();
-        }
-        int b = buttons[i];
-        if (b == KEY_RESERVED) {
+    void button(int key, bool pressed) {
+        if (key == KEY_RESERVED) {
             throw VirtualMouseInvalidArgumentError();
         }
 
         int state = pressed ? 1 : 0;
 
         libevdev_uinput_write_event(uinput, EV_KEY, BTN_TOOL_MOUSE, 1);
-        libevdev_uinput_write_event(uinput, EV_KEY, b, state);
+        libevdev_uinput_write_event(uinput, EV_KEY, key, state);
         libevdev_uinput_write_event(uinput, EV_SYN, SYN_REPORT, 0);
     }
 
