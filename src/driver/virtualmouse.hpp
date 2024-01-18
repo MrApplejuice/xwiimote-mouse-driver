@@ -86,6 +86,10 @@ struct VirtualMouse {
         libevdev_enable_event_code(dev, EV_KEY, BTN_MIDDLE, nullptr);
         libevdev_enable_event_code(dev, EV_KEY, BTN_TOOL_MOUSE, nullptr);
 
+        for (auto btn : SUPPORTED_BUTTONS) {
+            libevdev_enable_event_code(dev, EV_KEY, btn.code, nullptr);
+        }
+
         int err = libevdev_uinput_create_from_device(dev, LIBEVDEV_UINPUT_OPEN_MANAGED, &uinput);
         if (err < 0) {
             throw std::string("Failed to create uinput device");
