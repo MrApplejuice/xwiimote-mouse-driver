@@ -106,8 +106,6 @@ public:
     }
 
     virtual void process(const WiiMouseProcessingModule& prev) override {
-        copyFromPrev(prev);
-
         std::vector<int> lastPressedButtons;
         for (int i = 0; i < MAX_BUTTONS; i++) {
             if (!pressedButtons[i]) {
@@ -118,6 +116,8 @@ public:
             }
         }
 
+        copyFromPrev(prev);
+
         int assignedButtons = 0;
         for (auto& button : prev.pressedButtons) {
             if (assignedButtons >= MAX_BUTTONS) {
@@ -127,6 +127,9 @@ public:
                 break;
             }
             if (button.ns == ButtonNamespace::WII) {
+                if (!button.state) {
+                    continue;
+                }
                 auto mapping = wiiToEvdevMap.find((WiimoteButton) button.buttonId);
                 if (mapping != wiiToEvdevMap.end()) {
                     for (int evdevButton : mapping->second) {
@@ -466,13 +469,13 @@ public:
                     mouseCoord.values[1].value
                 );
             } 
-            for (auto button : processingEnd.pressedButtons) {
-                if (!button) {
-                    break;
-                }
-                if (button.ns == ButtonNamespace::VMOUSE) {
-                    vmouse.button(button.buttonId, button.state);
-                }
+        }
+        for (auto button : processingEnd.pressedButtons) {
+            if (!button) {
+                break;
+            }
+            if (button.ns == ButtonNamespace::VMOUSE) {
+                vmouse.button(button.buttonId, button.state && mouseEnabled);
             }
         }
 
@@ -491,8 +494,8 @@ public:
             0, 0, 10000, 10000
         );
 
-        buttonMapper.addMapping(WiimoteButton::A, 0);
-        buttonMapper.addMapping(WiimoteButton::B, 2);
+        buttonMapper.addMapping(WiimoteButton::A, BTN_LEFT);
+        buttonMapper.addMapping(WiimoteButton::B, BTN_RIGHT);
 
         processorSequence.push_back(&processingStart);
         processorSequence.push_back(&buttonMapper);
