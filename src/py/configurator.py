@@ -272,6 +272,8 @@ class KeybindingOption:
     @property
     def display_name(self):
         name = self.name or self.raw_key_name
+        if name == "None":
+            return "[Unassigned]"
         return f"{name} ({self.category})"
 
 
@@ -283,12 +285,25 @@ class KeybindingsComboboxes:
         self.on_screen_boxes = {}
         self.off_screen_boxes = {}
 
-        self.on_screen_selections = {}
-        self.off_screen_selections = {}
+        self.on_screen_selections = {
+            k: self.values[0] for k in WIIMOTE_BUTTON_READABLE_NAMES.keys()
+        }
+        self.off_screen_selections = dict(self.on_screen_selections)
 
     @property
     def __combobox_options(self):
         return [v.display_name for v in self.values]
+
+    def __update_selections(self):
+        for btn in WIIMOTE_BUTTON_READABLE_NAMES.keys():
+            if btn in self.on_screen_boxes:
+                self.on_screen_boxes[btn].set(
+                    self.on_screen_selections[btn].display_name
+                )
+            if btn in self.off_screen_boxes:
+                self.off_screen_boxes[btn].set(
+                    self.off_screen_selections[btn].display_name
+                )
 
     def add_combobox(self, wii_button: str, on_screen: bool, combobox: ttk.Combobox):
         combobox.config(values=self.__combobox_options)
@@ -298,6 +313,8 @@ class KeybindingsComboboxes:
         else:
             self.off_screen_boxes[wii_button] = combobox
 
+        self.__update_selections()
+
     def add_value(self, option: KeybindingOption):
         self.values.append(option)
 
@@ -305,6 +322,8 @@ class KeybindingsComboboxes:
             combobox.config(values=self.__combobox_options)
         for combobox in self.off_screen_boxes.values():
             combobox.config(values=self.__combobox_options)
+
+        self.__update_selections()
 
 
 class Window:
@@ -365,18 +384,18 @@ class Window:
 
         # Add buttons
         button_frame = tk.Frame(calibration_frame)
-        button_frame.pack(pady=10)
+        button_frame.pack(pady=10, padx=10, fill=tk.X)
 
         button1 = tk.Button(button_frame, text="Start calibration (1)")
-        button1.pack(side=tk.TOP, fill=tk.X)
+        button1.pack(side=tk.TOP, fill=tk.X, pady=5, padx=0)
         self.btn_start_calibration = button1
 
         button2 = tk.Button(button_frame, text="Enable mouse (2)")
-        button2.pack(side=tk.TOP, fill=tk.X)
+        button2.pack(side=tk.TOP, fill=tk.X, pady=5, padx=0)
         self.btn_enable_mouse = button2
 
         button3 = tk.Button(button_frame, text="Help")
-        button3.pack(side=tk.TOP, fill=tk.X)
+        button3.pack(side=tk.TOP, fill=tk.X, pady=5, padx=0)
 
         # Screen subregion controls
         self.screen_area_box = screen_area_box = tk.Frame(calibration_frame)
@@ -517,24 +536,29 @@ class CalibrationLogic(Logic):
     on_exit = None
 
     STEPS = [
-        "Point the wiimote to the center of the screen, then press A; press B to cancel",
-        "Point the wiimote to the top-left corner of the screen, then press A; press B to cancel",
-        "Point the wiimote to the top-right corner of the screen, then press A; press B to cancel",
-        "Point the wiimote to the bottom-left corner of the screen, then press A; press B to cancel",
-        "Point the wiimote to the bottom-right corner of the screen, then press A; press B to cancel",
+        "Point the wiimote to the center of the screen, then press A; press 1 to cancel",
+        "Point the wiimote to the top-left corner of the screen, then press A; press 1 to cancel",
+        "Point the wiimote to the top-right corner of the screen, then press A; press 1 to cancel",
+        "Point the wiimote to the bottom-left corner of the screen, then press A; press 1 to cancel",
+        "Point the wiimote to the bottom-right corner of the screen, then press A; press 1 to cancel",
         "Calibration completed",
     ]
 
     def start(self):
         self.step_data = []
         self.win.btn_start_calibration.config(
-            highlightcolor="blue", highlightthickness=5
+            highlightthickness=5,
+            highlightcolor="blue",
+            highlightbackground="blue",
+            pady=0,
+            padx=0,
         )
+        self.win.btn_start_calibration.pack(side=tk.TOP, fill=tk.X, pady=5, padx=0)
 
     def on_wii_button_pressed(self, button_name: str):
         if button_name == "a":
             self.step_data.append(self.wiimote.lr_vectors)
-        if button_name == "b":
+        if button_name == "1":
             if self.on_exit:
                 self.on_exit()
 
@@ -556,7 +580,8 @@ class CalibrationLogic(Logic):
         self.win.crosses.update(self.wiimote.lr_vectors)
 
     def stop(self):
-        self.win.btn_start_calibration.config(highlightthickness=0)
+        self.win.btn_start_calibration.config(highlightthickness=0, pady=5, padx=5)
+        self.win.btn_start_calibration.pack(side=tk.TOP, fill=tk.X, pady=5, padx=0)
 
 
 FREE_SORFTWARE_COPTYRIGHT_NOTICE = """
@@ -596,6 +621,7 @@ def main():
 
     root = tk.Tk()
     root.title("Wiimote mouse configurator")
+    root.resizable(False, False)
 
     current_logic = None
 
