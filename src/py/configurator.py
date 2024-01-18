@@ -14,13 +14,13 @@ You should have received a copy of the GNU General Public License along with
 Foobar. If not, see <https://www.gnu.org/licenses/>. 
 """
 
-from typing import Any, Tuple
-import ctypes
-import ctypes.util
+from typing import Any, Tuple, Optional, List
 import tkinter as tk
+import tkinter.font as tkf
 from tkinter import ttk
 import socket
 from dataclasses import dataclass
+from collections import OrderedDict
 
 import numpy as np
 import ctypes
@@ -29,18 +29,29 @@ import argparse
 import lzma
 import base64
 import struct
-
-_libc_path = ctypes.util.find_library("c")
-_libc = ctypes.CDLL(_libc_path)
+import time
 
 
-def fflush(file):
-    libc = ctypes.CDLL(ctypes.util.find_library("c"))
-    libc.fflush(file)
+WIIMOTE_BUTTON_READABLE_NAMES = OrderedDict(
+    [
+        ("a", "A"),
+        ("b", "B"),
+        ("+", "Plus"),
+        ("-", "Minus"),
+        ("h", "Home"),
+        ("1", "One"),
+        ("2", "Two"),
+        ("u", "Up"),
+        ("d", "Down"),
+        ("l", "Left"),
+        ("r", "Right"),
+    ]
+)
 
 
 @dataclass
 class OpenCommand:
+    start_time: int
     name: str
     params: Tuple[Any]
     sock: socket.socket
@@ -94,9 +105,11 @@ class WiimoteSocketReader:
     def send_message(self, name: str, *params, callback=None):
         req_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         req_sock.connect(self.socket_path)
-        req_sock.settimeout(0.1)
+        req_sock.settimeout(0.2)
 
-        self.open_commands.append(OpenCommand(name, params, req_sock, callback))
+        self.open_commands.append(
+            OpenCommand(time.time(), name, params, req_sock, callback)
+        )
 
         data = (":".join([name] + [str(x) for x in params]) + "\n").encode()
         padding = b"\0" * 1024
@@ -141,7 +154,6 @@ class WiimoteSocketReader:
             except IOError as e:
                 print(f"Error reading response for: {cmd.name}: {e}")
 
-        self.open_commands.clear()
         self.closed_commands = self.closed_commands[-self.MAX_CLOSED_COMMANDS :]
 
     def process(self):
@@ -251,6 +263,50 @@ def embedded_image(decompressed_embedded_image, root_bg_color):
     return img
 
 
+@dataclass
+class KeybindingOption:
+    raw_key_name: str
+    name: Optional[str]
+    category: str
+
+    @property
+    def display_name(self):
+        name = self.name or self.raw_key_name
+        return f"{name} ({self.category})"
+
+
+class KeybindingsComboboxes:
+    values: List[KeybindingOption]
+
+    def __init__(self):
+        self.values = [KeybindingOption("None", None, "None")]
+        self.on_screen_boxes = {}
+        self.off_screen_boxes = {}
+
+        self.on_screen_selections = {}
+        self.off_screen_selections = {}
+
+    @property
+    def __combobox_options(self):
+        return [v.display_name for v in self.values]
+
+    def add_combobox(self, wii_button: str, on_screen: bool, combobox: ttk.Combobox):
+        combobox.config(values=self.__combobox_options)
+
+        if on_screen:
+            self.on_screen_boxes[wii_button] = combobox
+        else:
+            self.off_screen_boxes[wii_button] = combobox
+
+    def add_value(self, option: KeybindingOption):
+        self.values.append(option)
+
+        for combobox in self.on_screen_boxes.values():
+            combobox.config(values=self.__combobox_options)
+        for combobox in self.off_screen_boxes.values():
+            combobox.config(values=self.__combobox_options)
+
+
 class Window:
     on_screen_area_updated = None
 
@@ -275,6 +331,8 @@ class Window:
     def __init__(self, root: tk.Tk):
         self.root = root
         root_background_color = parse_color_string(root.cget("background"))
+
+        bold_font = tkf.Font(weight="bold")
 
         self.refs = []
 
@@ -368,12 +426,37 @@ class Window:
         keybindings_main.pack()
         notebook.add(keybindings_main, text="Keybindings")
 
-        key_canvas = tk.Canvas(keybindings_main)
-        key_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
+        key_canvas = tk.Canvas(
+            keybindings_main, width=len(WIIMOTE_IMG[0]), height=len(WIIMOTE_IMG)
+        )
+        key_canvas.pack(side=tk.LEFT, fill=tk.Y, expand=False, padx=10)
 
         img = embedded_image(WIIMOTE_IMG, root_background_color)
         self.refs.append(img)
         key_canvas.create_image(0, 0, anchor=tk.NW, image=img)
+
+        button_assignments_grid = tk.Frame(keybindings_main)
+        button_assignments_grid.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, pady=10)
+
+        label = tk.Label(button_assignments_grid, text="On screen")
+        label.config(font=bold_font)
+        label.grid(row=0, column=1, padx=20, pady=5)
+
+        label = tk.Label(button_assignments_grid, text="Off screen")
+        label.config(font=bold_font)
+        label.grid(row=0, column=2, padx=20, pady=5)
+
+        self.keybindings = keybindings = KeybindingsComboboxes()
+        for i, wii_btn in enumerate(WIIMOTE_BUTTON_READABLE_NAMES.keys()):
+            label = tk.Label(
+                button_assignments_grid, text=WIIMOTE_BUTTON_READABLE_NAMES[wii_btn]
+            )
+            label.grid(row=i + 1, column=0, sticky=tk.W, padx=20, pady=3)
+
+            for col, on_screen in ((1, True), (2, False)):
+                combobox = ttk.Combobox(button_assignments_grid, values=[""])
+                combobox.grid(row=i + 1, column=col, padx=3, pady=3)
+                keybindings.add_combobox(wii_btn, on_screen, combobox)
 
 
 class Logic:
@@ -532,8 +615,58 @@ def main():
                     current_logic.on_wii_button_pressed(b_name)
         last_pressed_buttons = tuple(wiimote.pressed_buttons)
 
+    def query_keys(wiimote: WiimoteSocketReader):
+        BATCH_SIZE = 10
+
+        current_batch = []
+        batch_index = 0
+        key_count = 0
+
+        def query_key(i: int):
+            current_batch.append(i)
+
+            def received(reps, args):
+                current_batch.remove(i)
+                query_next_batch()
+                if reps != "OK":
+                    print("ERROR getting key index: ", i)
+                    return
+
+                def filter_none(x):
+                    if x == "":
+                        return None
+                    return x
+
+                kb = KeybindingOption(*(filter_none(x) for x in args))
+                window.keybindings.add_value(kb)
+
+            wiimote.send_message("keyget", i, callback=received)
+
+        def query_next_batch():
+            nonlocal batch_index
+
+            if current_batch:
+                return
+
+            while (batch_index < key_count) and (len(current_batch) < BATCH_SIZE):
+                query_key(batch_index)
+                batch_index += 1
+
+        def count_received(resp, args):
+            nonlocal key_count
+
+            if resp != "OK":
+                print("error getting key count: ", args)
+                return
+
+            key_count = int(args[0])
+            query_next_batch()
+
+        wiimote.send_message("keycount", callback=count_received)
+
     wiimote = WiimoteSocketReader(args.socket_path, root, new_socket_data)
     wiimote.send_message("mouse", "off")
+    query_keys(wiimote)
 
     def assign_screenarea(cmd, topLeftBottomRight100):
         if cmd == "ERROR":
@@ -617,1486 +750,6 @@ def main():
         root.mainloop()
     finally:
         wiimote.close()
-
-
-KEYMAP = [
-    {
-        "keycode": 1,
-        "keyname": "KEY_ESC",
-        "readable_name": "Escape",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 28,
-        "keyname": "KEY_ENTER",
-        "readable_name": "Enter",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 2,
-        "keyname": "KEY_1",
-        "readable_name": "1",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 3,
-        "keyname": "KEY_2",
-        "readable_name": "2",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 4,
-        "keyname": "KEY_3",
-        "readable_name": "3",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 5,
-        "keyname": "KEY_4",
-        "readable_name": "4",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 6,
-        "keyname": "KEY_5",
-        "readable_name": "5",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 7,
-        "keyname": "KEY_6",
-        "readable_name": "6",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 8,
-        "keyname": "KEY_7",
-        "readable_name": "7",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 9,
-        "keyname": "KEY_8",
-        "readable_name": "8",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 10,
-        "keyname": "KEY_9",
-        "readable_name": "9",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 11,
-        "keyname": "KEY_0",
-        "readable_name": "0",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 12,
-        "keyname": "KEY_MINUS",
-        "readable_name": "-",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 13,
-        "keyname": "KEY_EQUAL",
-        "readable_name": "=",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 14,
-        "keyname": "KEY_BACKSPACE",
-        "readable_name": "Backspace",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 15,
-        "keyname": "KEY_TAB",
-        "readable_name": "Tab",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 16,
-        "keyname": "KEY_Q",
-        "readable_name": "Q",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 17,
-        "keyname": "KEY_W",
-        "readable_name": "W",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 18,
-        "keyname": "KEY_E",
-        "readable_name": "E",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 19,
-        "keyname": "KEY_R",
-        "readable_name": "R",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 20,
-        "keyname": "KEY_T",
-        "readable_name": "T",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 21,
-        "keyname": "KEY_Y",
-        "readable_name": "Y",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 22,
-        "keyname": "KEY_U",
-        "readable_name": "U",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 23,
-        "keyname": "KEY_I",
-        "readable_name": "I",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 24,
-        "keyname": "KEY_O",
-        "readable_name": "O",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 25,
-        "keyname": "KEY_P",
-        "readable_name": "P",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 26,
-        "keyname": "KEY_LEFTBRACE",
-        "readable_name": "[",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 27,
-        "keyname": "KEY_RIGHTBRACE",
-        "readable_name": "]",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 30,
-        "keyname": "KEY_A",
-        "readable_name": "A",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 31,
-        "keyname": "KEY_S",
-        "readable_name": "S",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 32,
-        "keyname": "KEY_D",
-        "readable_name": "D",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 33,
-        "keyname": "KEY_F",
-        "readable_name": "F",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 34,
-        "keyname": "KEY_G",
-        "readable_name": "G",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 35,
-        "keyname": "KEY_H",
-        "readable_name": "H",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 36,
-        "keyname": "KEY_J",
-        "readable_name": "J",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 37,
-        "keyname": "KEY_K",
-        "readable_name": "K",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 38,
-        "keyname": "KEY_L",
-        "readable_name": "L",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 39,
-        "keyname": "KEY_SEMICOLON",
-        "readable_name": ";",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 40,
-        "keyname": "KEY_APOSTROPHE",
-        "readable_name": "'",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 41,
-        "keyname": "KEY_GRAVE",
-        "readable_name": "`",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 43,
-        "keyname": "KEY_BACKSLASH",
-        "readable_name": "\\",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 44,
-        "keyname": "KEY_Z",
-        "readable_name": "Z",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 45,
-        "keyname": "KEY_X",
-        "readable_name": "X",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 46,
-        "keyname": "KEY_C",
-        "readable_name": "C",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 47,
-        "keyname": "KEY_V",
-        "readable_name": "V",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 48,
-        "keyname": "KEY_B",
-        "readable_name": "B",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 49,
-        "keyname": "KEY_N",
-        "readable_name": "N",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 50,
-        "keyname": "KEY_M",
-        "readable_name": "M",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 51,
-        "keyname": "KEY_COMMA",
-        "readable_name": ",",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 52,
-        "keyname": "KEY_DOT",
-        "readable_name": ".",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 53,
-        "keyname": "KEY_SLASH",
-        "readable_name": "/",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 57,
-        "keyname": "KEY_SPACE",
-        "readable_name": "Space",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 59,
-        "keyname": "KEY_F1",
-        "readable_name": "F1",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 60,
-        "keyname": "KEY_F2",
-        "readable_name": "F2",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 61,
-        "keyname": "KEY_F3",
-        "readable_name": "F3",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 62,
-        "keyname": "KEY_F4",
-        "readable_name": "F4",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 63,
-        "keyname": "KEY_F5",
-        "readable_name": "F5",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 64,
-        "keyname": "KEY_F6",
-        "readable_name": "F6",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 65,
-        "keyname": "KEY_F7",
-        "readable_name": "F7",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 66,
-        "keyname": "KEY_F8",
-        "readable_name": "F8",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 67,
-        "keyname": "KEY_F9",
-        "readable_name": "F9",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 68,
-        "keyname": "KEY_F10",
-        "readable_name": "F10",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 87,
-        "keyname": "KEY_F11",
-        "readable_name": "F11",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 88,
-        "keyname": "KEY_F12",
-        "readable_name": "F12",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 56,
-        "keyname": "KEY_LEFTALT",
-        "readable_name": "Left Alt",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 42,
-        "keyname": "KEY_LEFTSHIFT",
-        "readable_name": "Left Shift",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 29,
-        "keyname": "KEY_LEFTCTRL",
-        "readable_name": "Left Control",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 125,
-        "keyname": "KEY_LEFTMETA",
-        "readable_name": "Left Meta",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 54,
-        "keyname": "KEY_RIGHTSHIFT",
-        "readable_name": "Right Shift",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 100,
-        "keyname": "KEY_RIGHTALT",
-        "readable_name": "Right Alt",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 97,
-        "keyname": "KEY_RIGHTCTRL",
-        "readable_name": "Right Control",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 126,
-        "keyname": "KEY_RIGHTMETA",
-        "readable_name": "Right Meta",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 58,
-        "keyname": "KEY_CAPSLOCK",
-        "readable_name": "Caps Lock",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 69,
-        "keyname": "KEY_NUMLOCK",
-        "readable_name": "Numlock",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 70,
-        "keyname": "KEY_SCROLLLOCK",
-        "readable_name": "Scrollock",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 55,
-        "keyname": "KEY_KPASTERISK",
-        "readable_name": "Keypad *",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 79,
-        "keyname": "KEY_KP1",
-        "readable_name": "Keypad 1",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 80,
-        "keyname": "KEY_KP2",
-        "readable_name": "Keypad 2",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 81,
-        "keyname": "KEY_KP3",
-        "readable_name": "Keypad 3",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 75,
-        "keyname": "KEY_KP4",
-        "readable_name": "Keypad 4",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 76,
-        "keyname": "KEY_KP5",
-        "readable_name": "Keypad 5",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 77,
-        "keyname": "KEY_KP6",
-        "readable_name": "Keypad 6",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 71,
-        "keyname": "KEY_KP7",
-        "readable_name": "Keypad 7",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 72,
-        "keyname": "KEY_KP8",
-        "readable_name": "Keypad 8",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 73,
-        "keyname": "KEY_KP9",
-        "readable_name": "Keypad 9",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 82,
-        "keyname": "KEY_KP0",
-        "readable_name": "Keypad 0",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 78,
-        "keyname": "KEY_KPPLUS",
-        "readable_name": "Keypad +",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 74,
-        "keyname": "KEY_KPMINUS",
-        "readable_name": "Keypad -",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 83,
-        "keyname": "KEY_KPDOT",
-        "readable_name": "Keypad .",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 96,
-        "keyname": "KEY_KPENTER",
-        "readable_name": "Keypad Enter",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 98,
-        "keyname": "KEY_KPSLASH",
-        "readable_name": "Keypad /",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 99,
-        "keyname": "KEY_SYSRQ",
-        "readable_name": "Sys Rq",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 110,
-        "keyname": "KEY_INSERT",
-        "readable_name": "Insert",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 111,
-        "keyname": "KEY_DELETE",
-        "readable_name": "Delete",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 102,
-        "keyname": "KEY_HOME",
-        "readable_name": "Home",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 107,
-        "keyname": "KEY_END",
-        "readable_name": "End",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 104,
-        "keyname": "KEY_PAGEUP",
-        "readable_name": "Page Up",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 109,
-        "keyname": "KEY_PAGEDOWN",
-        "readable_name": "Page Down",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 105,
-        "keyname": "KEY_LEFT",
-        "readable_name": "Left",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 106,
-        "keyname": "KEY_RIGHT",
-        "readable_name": "Right",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 103,
-        "keyname": "KEY_UP",
-        "readable_name": "Up",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 108,
-        "keyname": "KEY_DOWN",
-        "readable_name": "Down",
-        "section_name": "Keyboard",
-    },
-    {
-        "keycode": 95,
-        "keyname": "KEY_KPJPCOMMA",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 85,
-        "keyname": "KEY_ZENKAKUHANKAKU",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 86,
-        "keyname": "KEY_102ND",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 89,
-        "keyname": "KEY_RO",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 90,
-        "keyname": "KEY_KATAKANA",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 91,
-        "keyname": "KEY_HIRAGANA",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 92,
-        "keyname": "KEY_HENKAN",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 93,
-        "keyname": "KEY_KATAKANAHIRAGANA",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 94,
-        "keyname": "KEY_MUHENKAN",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 101,
-        "keyname": "KEY_LINEFEED",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 112,
-        "keyname": "KEY_MACRO",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 113,
-        "keyname": "KEY_MUTE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 114,
-        "keyname": "KEY_VOLUMEDOWN",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 115,
-        "keyname": "KEY_VOLUMEUP",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 116,
-        "keyname": "KEY_POWER",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 117,
-        "keyname": "KEY_KPEQUAL",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 118,
-        "keyname": "KEY_KPPLUSMINUS",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 119,
-        "keyname": "KEY_PAUSE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 120,
-        "keyname": "KEY_SCALE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 121,
-        "keyname": "KEY_KPCOMMA",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 122,
-        "keyname": "KEY_HANGEUL",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 123,
-        "keyname": "KEY_HANJA",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 124,
-        "keyname": "KEY_YEN",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 127,
-        "keyname": "KEY_COMPOSE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 128,
-        "keyname": "KEY_STOP",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 129,
-        "keyname": "KEY_AGAIN",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 130,
-        "keyname": "KEY_PROPS",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 131,
-        "keyname": "KEY_UNDO",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 132,
-        "keyname": "KEY_FRONT",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 133,
-        "keyname": "KEY_COPY",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 134,
-        "keyname": "KEY_OPEN",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 135,
-        "keyname": "KEY_PASTE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 136,
-        "keyname": "KEY_FIND",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 137,
-        "keyname": "KEY_CUT",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 138,
-        "keyname": "KEY_HELP",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 139,
-        "keyname": "KEY_MENU",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 140,
-        "keyname": "KEY_CALC",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 141,
-        "keyname": "KEY_SETUP",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 142,
-        "keyname": "KEY_SLEEP",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 143,
-        "keyname": "KEY_WAKEUP",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 144,
-        "keyname": "KEY_FILE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 145,
-        "keyname": "KEY_SENDFILE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 146,
-        "keyname": "KEY_DELETEFILE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 147,
-        "keyname": "KEY_XFER",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 148,
-        "keyname": "KEY_PROG1",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 149,
-        "keyname": "KEY_PROG2",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 150,
-        "keyname": "KEY_WWW",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 151,
-        "keyname": "KEY_MSDOS",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 152,
-        "keyname": "KEY_COFFEE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 152,
-        "keyname": "KEY_SCREENLOCK",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 153,
-        "keyname": "KEY_ROTATE_DISPLAY",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 153,
-        "keyname": "KEY_DIRECTION",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 154,
-        "keyname": "KEY_CYCLEWINDOWS",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 155,
-        "keyname": "KEY_MAIL",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 156,
-        "keyname": "KEY_BOOKMARKS",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 157,
-        "keyname": "KEY_COMPUTER",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 158,
-        "keyname": "KEY_BACK",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 159,
-        "keyname": "KEY_FORWARD",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 160,
-        "keyname": "KEY_CLOSECD",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 161,
-        "keyname": "KEY_EJECTCD",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 162,
-        "keyname": "KEY_EJECTCLOSECD",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 163,
-        "keyname": "KEY_NEXTSONG",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 164,
-        "keyname": "KEY_PLAYPAUSE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 165,
-        "keyname": "KEY_PREVIOUSSONG",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 166,
-        "keyname": "KEY_STOPCD",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 167,
-        "keyname": "KEY_RECORD",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 168,
-        "keyname": "KEY_REWIND",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 169,
-        "keyname": "KEY_PHONE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 170,
-        "keyname": "KEY_ISO",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 171,
-        "keyname": "KEY_CONFIG",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 172,
-        "keyname": "KEY_HOMEPAGE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 173,
-        "keyname": "KEY_REFRESH",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 174,
-        "keyname": "KEY_EXIT",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 175,
-        "keyname": "KEY_MOVE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 176,
-        "keyname": "KEY_EDIT",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 177,
-        "keyname": "KEY_SCROLLUP",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 178,
-        "keyname": "KEY_SCROLLDOWN",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 179,
-        "keyname": "KEY_KPLEFTPAREN",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 180,
-        "keyname": "KEY_KPRIGHTPAREN",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 181,
-        "keyname": "KEY_NEW",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 182,
-        "keyname": "KEY_REDO",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 183,
-        "keyname": "KEY_F13",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 184,
-        "keyname": "KEY_F14",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 185,
-        "keyname": "KEY_F15",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 186,
-        "keyname": "KEY_F16",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 187,
-        "keyname": "KEY_F17",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 188,
-        "keyname": "KEY_F18",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 189,
-        "keyname": "KEY_F19",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 190,
-        "keyname": "KEY_F20",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 191,
-        "keyname": "KEY_F21",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 192,
-        "keyname": "KEY_F22",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 193,
-        "keyname": "KEY_F23",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 194,
-        "keyname": "KEY_F24",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 200,
-        "keyname": "KEY_PLAYCD",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 201,
-        "keyname": "KEY_PAUSECD",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 202,
-        "keyname": "KEY_PROG3",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 203,
-        "keyname": "KEY_PROG4",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 204,
-        "keyname": "KEY_ALL_APPLICATIONS",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 204,
-        "keyname": "KEY_DASHBOARD",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 205,
-        "keyname": "KEY_SUSPEND",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 206,
-        "keyname": "KEY_CLOSE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 207,
-        "keyname": "KEY_PLAY",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 208,
-        "keyname": "KEY_FASTFORWARD",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 209,
-        "keyname": "KEY_BASSBOOST",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 210,
-        "keyname": "KEY_PRINT",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 211,
-        "keyname": "KEY_HP",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 212,
-        "keyname": "KEY_CAMERA",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 213,
-        "keyname": "KEY_SOUND",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 214,
-        "keyname": "KEY_QUESTION",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 215,
-        "keyname": "KEY_EMAIL",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 216,
-        "keyname": "KEY_CHAT",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 217,
-        "keyname": "KEY_SEARCH",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 218,
-        "keyname": "KEY_CONNECT",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 219,
-        "keyname": "KEY_FINANCE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 220,
-        "keyname": "KEY_SPORT",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 221,
-        "keyname": "KEY_SHOP",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 222,
-        "keyname": "KEY_ALTERASE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 223,
-        "keyname": "KEY_CANCEL",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 224,
-        "keyname": "KEY_BRIGHTNESSDOWN",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 225,
-        "keyname": "KEY_BRIGHTNESSUP",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 226,
-        "keyname": "KEY_MEDIA",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 227,
-        "keyname": "KEY_SWITCHVIDEOMODE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 228,
-        "keyname": "KEY_KBDILLUMTOGGLE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 229,
-        "keyname": "KEY_KBDILLUMDOWN",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 230,
-        "keyname": "KEY_KBDILLUMUP",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 231,
-        "keyname": "KEY_SEND",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 232,
-        "keyname": "KEY_REPLY",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 233,
-        "keyname": "KEY_FORWARDMAIL",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 234,
-        "keyname": "KEY_SAVE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 235,
-        "keyname": "KEY_DOCUMENTS",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 236,
-        "keyname": "KEY_BATTERY",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 237,
-        "keyname": "KEY_BLUETOOTH",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 238,
-        "keyname": "KEY_WLAN",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 239,
-        "keyname": "KEY_UWB",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 241,
-        "keyname": "KEY_VIDEO_NEXT",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 242,
-        "keyname": "KEY_VIDEO_PREV",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 243,
-        "keyname": "KEY_BRIGHTNESS_CYCLE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 244,
-        "keyname": "KEY_BRIGHTNESS_AUTO",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 244,
-        "keyname": "KEY_BRIGHTNESS_ZERO",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 245,
-        "keyname": "KEY_DISPLAY_OFF",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 246,
-        "keyname": "KEY_WWAN",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 246,
-        "keyname": "KEY_WIMAX",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 247,
-        "keyname": "KEY_RFKILL",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-    {
-        "keycode": 248,
-        "keyname": "KEY_MICMUTE",
-        "readable_name": None,
-        "section_name": "Extended Keyboard",
-    },
-]
 
 
 def decompress_embedded_image(data):

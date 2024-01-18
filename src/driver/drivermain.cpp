@@ -634,6 +634,41 @@ int main(int argc, char* argv[]) {
                         return "ERROR:Invalid parameter";
                     }
                 }
+                if (command == "keycount") {
+                    std::stringstream ss;
+                    ss << "OK:" << SUPPORTED_BUTTONS.size();
+                    eventResultBuffer = ss.str();
+                    return eventResultBuffer.c_str();
+                }
+                if (command == "keyget") {
+                    if (parameters.size() != 1) {
+                        return "ERROR:Single key index expected";
+                    }
+                    int index;
+                    try {
+                        index = std::stoi(parameters[0]);
+                    }
+                    catch (std::invalid_argument& e) {
+                        return "ERROR:Invalid index";
+                    }
+                    catch (std::out_of_range& e) {
+                        return "ERROR:Invalid index";
+                    }
+
+                    if ((index < 0) || (index >= (int) SUPPORTED_BUTTONS.size())) {
+                        return "ERROR:Out of bounds";
+                    }
+
+                    auto key = SUPPORTED_BUTTONS[index];
+
+                    std::stringstream ss;
+                    ss << "OK:" 
+                        << key.rawKeyName 
+                        << ":" << (key.name ? key.name : "")
+                        << ":" << key.category;
+                    eventResultBuffer = ss.str();
+                    return eventResultBuffer.c_str();
+                }
                 return "ERROR:Invalid command";
             }
         );
