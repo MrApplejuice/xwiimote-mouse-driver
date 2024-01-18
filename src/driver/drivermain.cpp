@@ -113,7 +113,7 @@ public:
             if (!pressedButtons[i]) {
                 break;
             }
-            if (pressedButtons[i].ns == ButtonNamespace::VMOUSE) {
+            if ((pressedButtons[i].ns == ButtonNamespace::VMOUSE) && pressedButtons[i].state) {
                 lastPressedButtons.push_back(pressedButtons[i].buttonId);
             }
         }
@@ -147,6 +147,15 @@ public:
                     }
                 }
             }
+        }
+
+        for (int evdevButton : lastPressedButtons) {
+            if (assignedButtons >= MAX_BUTTONS) {
+                break;
+            }
+            pressedButtons[assignedButtons++] = NamespacedButtonState(
+                ButtonNamespace::VMOUSE, evdevButton, false
+            );
         }
 
         if (assignedButtons < MAX_BUTTONS) {
