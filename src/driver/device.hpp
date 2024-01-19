@@ -43,6 +43,7 @@ enum class WiimoteButton {
 
 extern std::map<int, WiimoteButton> XWIIMOTE_BUTTON_MAP;
 extern std::map<WiimoteButton, std::string> WIIMOTE_BUTTON_NAMES;
+extern std::map<WiimoteButton, std::string> WIIMOTE_BUTTON_READABLE_NAMES;
 
 struct WiimoteButtonStates {
     bool pressedButtons[(int) WiimoteButton::COUNT];

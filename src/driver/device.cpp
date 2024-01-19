@@ -30,6 +30,20 @@ std::map<WiimoteButton, std::string> WIIMOTE_BUTTON_NAMES = {
     {WiimoteButton::Right, "r"}
 };
 
+std::map<WiimoteButton, std::string> WIIMOTE_BUTTON_READABLE_NAMES = {
+    {WiimoteButton::A, "A"},
+    {WiimoteButton::B, "B"},
+    {WiimoteButton::Plus, "Plus"},
+    {WiimoteButton::Minus, "Minus"},
+    {WiimoteButton::Home, "Home"},
+    {WiimoteButton::One, "One"},
+    {WiimoteButton::Two, "Two"},
+    {WiimoteButton::Up, "Up"},
+    {WiimoteButton::Down, "Down"},
+    {WiimoteButton::Left, "Left"},
+    {WiimoteButton::Right, "Right"}
+};
+
 std::map<int, WiimoteButton> XWIIMOTE_BUTTON_MAP = {
     {XWII_KEY_A, WiimoteButton::A},
     {XWII_KEY_B, WiimoteButton::B},

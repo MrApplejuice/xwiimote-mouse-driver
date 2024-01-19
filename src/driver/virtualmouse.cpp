@@ -17,9 +17,9 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 #include "virtualmouse.hpp"
 
 const std::vector<SupportedButton> SUPPORTED_BUTTONS = {
-     {BTN_LEFT, "BTN_LEFT", "Left", "Mouse"},
-     {BTN_RIGHT, "BTN_RIGHT", "Right", "Mouse"},
-     {BTN_MIDDLE, "BTN_MIDDLE", "Middle", "Mouse"},
+     {BTN_LEFT, "BTN_LEFT", "Left Button", "Mouse"},
+     {BTN_RIGHT, "BTN_RIGHT", "Right Button", "Mouse"},
+     {BTN_MIDDLE, "BTN_MIDDLE", "Middle Button", "Mouse"},
      {BTN_FORWARD, "BTN_FORWARD", "Forward", "Mouse"},
      {BTN_BACK, "BTN_BACK", "Back", "Mouse"},
      {BTN_SIDE, "BTN_SIDE", nullptr, "Mouse"},
@@ -273,9 +273,22 @@ const std::vector<SupportedButton> SUPPORTED_BUTTONS = {
      {KEY_MICMUTE, "KEY_MICMUTE", nullptr, "Extended Keyboard"},
 };
 
-const SupportedButton* findButton(const std::string& rawName) {
+const SupportedButton* findButtonByName(const std::string& rawName) {
     for (auto& button : SUPPORTED_BUTTONS) {
+        if (button.name && (button.name == rawName)) {
+            return &button;
+        }
         if (button.rawKeyName == rawName) {
+            return &button;
+        }
+    }
+
+    return nullptr;
+}
+
+const SupportedButton* findButtonByCode(int id) {
+    for (auto& button : SUPPORTED_BUTTONS) {
+        if (button.code == id) {
             return &button;
         }
     }

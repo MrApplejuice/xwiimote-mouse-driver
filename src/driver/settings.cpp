@@ -24,6 +24,17 @@ const char* VALID_OPTIONS[] = {
     "calmatY",
     "screen_top_left",
     "screen_bottom_right",
+    "button_a",
+    "button_b",
+    "button_plus",
+    "button_minus",
+    "button_home",
+    "button_one",
+    "button_two",
+    "button_up",
+    "button_down",
+    "button_left",
+    "button_right",
     nullptr
 };
 

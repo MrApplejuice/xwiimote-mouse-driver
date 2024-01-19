@@ -27,3 +27,4 @@ extern std::vector<std::string> split(const std::string& str, char delim);
 extern std::string trim(const std::string& str);
 extern std::string replaceAll(const std::string& str, const std::string& from, const std::string& to);
 extern bool isStringInCstrList(const std::string& key, const char* list[]);
+extern std::string asciiLower(const std::string& str);

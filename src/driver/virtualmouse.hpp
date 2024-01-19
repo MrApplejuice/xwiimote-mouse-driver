@@ -36,7 +36,8 @@ struct SupportedButton {
 
 extern const std::vector<SupportedButton> SUPPORTED_BUTTONS;
 
-const SupportedButton* findButton(const std::string& rawName);
+const SupportedButton* findButtonByName(const std::string& rawName);
+const SupportedButton* findButtonByCode(int code);
 
 struct VirtualMouse {
     libevdev* dev;

@@ -24,6 +24,7 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 #include <unordered_map>
 
 #include "intlinalg.hpp"
+#include "stringtools.hpp"
 
 static const std::string DEFAULT_CONFIG_PATH = "./wiimote-mouse.conf";
 extern const char* VECTOR_OPTIONS[];
@@ -43,7 +44,8 @@ public:
 
     Config(const std::string& filePath) : filePath(filePath) {}
 
-    void provideDefault(const std::string& key, const std::string& value) {
+    void provideDefault(std::string key, const std::string& value) {
+        key = asciiLower(key);
         if (isVectorOption(key)) {
             auto vec = parseVector3(value);
             if (!vec) {
@@ -103,10 +105,10 @@ public:
         }
 
         for (auto& pair : stringOptions) {
-            configFile << pair.first << "=" << pair.second << std::endl;
+            configFile << asciiLower(pair.first) << "=" << pair.second << std::endl;
         }
         for (auto& pair : vectorOptions) {
-            configFile << pair.first << "=" << vector3ToString(pair.second) << std::endl;
+            configFile << asciiLower(pair.first) << "=" << vector3ToString(pair.second) << std::endl;
         }
 
         configFile.close();

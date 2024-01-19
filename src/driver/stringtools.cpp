@@ -16,6 +16,8 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 
 #include "stringtools.hpp"
 
+#include <algorithm>
+
 std::vector<std::string> split(const std::string& str, char delim) {
     std::vector<std::string> result;
     std::string current = "";
@@ -63,3 +65,9 @@ bool isStringInCstrList(const std::string& key, const char* list[]) {
     }
     return false;
 }
+
+std::string asciiLower(const std::string& str) {
+    std::string result = str;
+    std::transform(result.begin(), result.end(), result.begin(), ::tolower);
+    return result;
+}  

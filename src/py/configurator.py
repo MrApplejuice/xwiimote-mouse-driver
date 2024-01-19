@@ -14,7 +14,8 @@ You should have received a copy of the GNU General Public License along with
 Foobar. If not, see <https://www.gnu.org/licenses/>. 
 """
 
-from typing import Any, Tuple, Optional, List
+import sys
+from typing import Any, Tuple, Optional, List, Union
 import tkinter as tk
 import tkinter.font as tkf
 from tkinter import ttk
@@ -23,7 +24,6 @@ from dataclasses import dataclass
 from collections import OrderedDict
 
 import numpy as np
-import ctypes
 import argparse
 
 import lzma
@@ -297,12 +297,12 @@ class KeybindingsComboboxes:
     def __update_selections(self):
         for btn in WIIMOTE_BUTTON_READABLE_NAMES.keys():
             if btn in self.on_screen_boxes:
-                self.on_screen_boxes[btn].set(
-                    self.on_screen_selections[btn].display_name
+                self.on_screen_boxes[btn].current(
+                    self.values.index(self.on_screen_selections[btn])
                 )
             if btn in self.off_screen_boxes:
-                self.off_screen_boxes[btn].set(
-                    self.off_screen_selections[btn].display_name
+                self.off_screen_boxes[btn].current(
+                    self.values.index(self.off_screen_selections[btn])
                 )
 
     def add_combobox(self, wii_button: str, on_screen: bool, combobox: ttk.Combobox):
@@ -323,6 +323,20 @@ class KeybindingsComboboxes:
         for combobox in self.off_screen_boxes.values():
             combobox.config(values=self.__combobox_options)
 
+        self.__update_selections()
+
+    def set_mapping(self, wii_button: str, on_screen: bool, option: Union[KeybindingOption, str, None]):
+        if isinstance(option, str):
+            option = next((v for v in self.values if v.raw_key_name == option), None)
+            if option is None:
+                print(f"Unknown key name: {option}", file=sys.stderr)
+        if option is None:
+            option = self.values[0]
+        
+        if on_screen:
+            self.on_screen_selections[wii_button] = option
+        else:
+            self.off_screen_selections[wii_button] = option
         self.__update_selections()
 
 
@@ -641,6 +655,20 @@ def main():
                     current_logic.on_wii_button_pressed(b_name)
         last_pressed_buttons = tuple(wiimote.pressed_buttons)
 
+    def query_keymap():
+        def received(reps, args):
+            if reps != "OK":
+                print("ERROR getting keymap: ", args)
+                return
+
+            pairs = zip(args[::2], args[1::2])
+            for wiiButtonName, targetButtonName in pairs:
+                window.keybindings.set_mapping(
+                    wiiButtonName, True, targetButtonName
+                )
+
+        wiimote.send_message("keymapget", callback=received)
+
     def query_keys(wiimote: WiimoteSocketReader):
         BATCH_SIZE = 10
 
@@ -677,6 +705,9 @@ def main():
             while (batch_index < key_count) and (len(current_batch) < BATCH_SIZE):
                 query_key(batch_index)
                 batch_index += 1
+
+            if len(current_batch) == 0:
+                query_keymap()
 
         def count_received(resp, args):
             nonlocal key_count

@@ -105,6 +105,21 @@ public:
         v.push_back(evdevButton);
     }
 
+    std::map<std::string, std::string> getStringMappings() const {
+        std::map<std::string, std::string> result;
+        for (auto& mapping : wiiToEvdevMap) {
+            std::string key = WIIMOTE_BUTTON_READABLE_NAMES[mapping.first];
+            for (int evdevButton : mapping.second) {
+                const SupportedButton* btn = findButtonByCode(evdevButton);
+                if (btn) {
+                    result[key] = btn->rawKeyName;
+                    break;                    
+                }
+            }
+        }
+        return result;
+    }
+
     virtual void process(const WiiMouseProcessingModule& prev) override {
         std::vector<int> lastPressedButtons;
         for (int i = 0; i < MAX_BUTTONS; i++) {
@@ -391,6 +406,33 @@ public:
         return irSpotClustering.rightPoint.undivide();
     }
 
+    std::map<std::string, std::string> getButtonMap() const {
+        return buttonMapper.getStringMappings();
+    }
+
+    void clearButtonMap() {
+        buttonMapper.clearMapping();
+    }
+
+    bool mapButton(const std::string& wiiButton, const std::string& evdevButton) {
+        auto wiiButtonSearch = std::find_if(
+            WIIMOTE_BUTTON_READABLE_NAMES.begin(),
+            WIIMOTE_BUTTON_READABLE_NAMES.end(),
+            [wiiButton](const std::pair<WiimoteButton, std::string>& p) {
+                return p.second == wiiButton;
+            }
+        );
+        if (wiiButtonSearch == WIIMOTE_BUTTON_READABLE_NAMES.end()) {
+            return false;
+        }
+        auto evdevButtonSearch = findButtonByName(evdevButton);
+        if (!evdevButtonSearch) {
+            return false;
+        }
+        buttonMapper.addMapping(wiiButtonSearch->first, evdevButtonSearch->code);
+        return true;
+    }
+
     const WiimoteButtonStates& getButtonStates() const {
         return wiimote->buttonStates;
     }
@@ -575,6 +617,14 @@ int main(int argc, char* argv[]) {
             "screen_bottom_right",
             vector3ToString(Vector3(10000, 10000, 0))
         );
+
+        auto keyMappings = wmouse.getButtonMap();
+        for (auto& mapping : keyMappings) {
+            config.provideDefault(
+                "button_" + mapping.first,
+                mapping.second
+            );
+        }
     }
     wmouse.setCalibrationVectors(
         config.vectorOptions["calmatX"],
@@ -586,6 +636,19 @@ int main(int argc, char* argv[]) {
         config.vectorOptions["screen_bottom_right"].values[0],
         config.vectorOptions["screen_bottom_right"].values[1]
     );
+    wmouse.clearButtonMap();
+    for (auto btnName : WIIMOTE_BUTTON_READABLE_NAMES) {
+        std::string key = asciiLower("button_" + btnName.second);
+        if (config.stringOptions.find(key) != config.stringOptions.end()) {
+            if (!wmouse.mapButton(btnName.second, config.stringOptions[key])) {
+                std::cerr << "Ignoring invalid button map: " 
+                    << btnName.second 
+                    << " to " 
+                    << config.stringOptions[key] << std::endl;
+            }
+        }
+    }
+
     std::cout << "Mouse driver started!" << std::endl;
     signal(SIGINT, signalHandler);
 
@@ -717,6 +780,17 @@ int main(int argc, char* argv[]) {
                         << ":" << (key.name ? key.name : "")
                         << ":" << key.category;
                     eventResultBuffer = ss.str();
+                    return eventResultBuffer.c_str();
+                }
+                if (command == "keymapget") {
+                    auto keymap = wmouse.getButtonMap();
+                    std::stringstream ss;
+                    ss << "OK:";
+                    for (auto& mapping : keymap) {
+                        ss << asciiLower(mapping.first) << ":" << mapping.second << ":";
+                    }
+                    eventResultBuffer = ss.str();
+                    eventResultBuffer.pop_back(); // remove trailing ':'
                     return eventResultBuffer.c_str();
                 }
                 return "ERROR:Invalid command";
