@@ -15,7 +15,7 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 """
 
 import sys
-from typing import Any, Tuple, Optional, List, Union
+from typing import Any, Tuple, Optional, List, Union, Callable
 import tkinter as tk
 import tkinter.font as tkf
 from tkinter import ttk
@@ -279,6 +279,9 @@ class KeybindingOption:
 
 class KeybindingsComboboxes:
     values: List[KeybindingOption]
+    on_new_mapping_selected: Optional[Callable[[str, str, bool], None]] = None
+
+    __internal_update = 0
 
     def __init__(self):
         self.values = [KeybindingOption("None", None, "None")]
@@ -289,6 +292,13 @@ class KeybindingsComboboxes:
             k: self.values[0] for k in WIIMOTE_BUTTON_READABLE_NAMES.keys()
         }
         self.off_screen_selections = dict(self.on_screen_selections)
+
+    def __wrap_internal(self, func, *args, **kwargs):
+        self.__internal_update += 1
+        try:
+            return func(*args, **kwargs)
+        finally:
+            self.__internal_update -= 1
 
     @property
     def __combobox_options(self):
@@ -305,15 +315,84 @@ class KeybindingsComboboxes:
                     self.values.index(self.off_screen_selections[btn])
                 )
 
+    def __find_closest_match(self, combo_value: str) -> Optional[KeybindingOption]:
+        combo_value = combo_value.strip().lower()
+        found = None
+        if combo_value == "":
+            found = self.values[0]
+        else:
+            for keyValue in self.values:
+                if keyValue.name and keyValue.name.lower() == combo_value:
+                    found = keyValue
+                if (
+                    keyValue.raw_key_name
+                    and keyValue.raw_key_name.lower() == combo_value
+                ):
+                    found = keyValue
+                if keyValue.display_name.lower() == combo_value:
+                    found = keyValue
+                if found:
+                    break
+        return found
+
+    def __selection_changed(
+        self, wii_button: str, on_screen: bool, combobox: ttk.Combobox, event
+    ):
+        found = self.__find_closest_match(combobox.get())
+        if not found:
+            pass
+        if on_screen:
+            self.on_screen_selections[wii_button] = found
+        else:
+            self.off_screen_selections[wii_button] = found
+
+        if self.__internal_update == 0:
+            if self.on_new_mapping_selected:
+                self.on_new_mapping_selected(wii_button, found.raw_key_name, on_screen)
+
+    def __validate_match(self, wii_button: str, on_screen: bool, combobox):
+        found = self.__find_closest_match(combobox.get())
+        if found is None:
+            return False
+
+        if on_screen:
+            self.on_screen_selections[wii_button] = found
+        else:
+            self.off_screen_selections[wii_button] = found
+        self.__update_selections()
+
+        if self.__internal_update == 0:
+            if self.on_new_mapping_selected:
+                self.on_new_mapping_selected(wii_button, found.raw_key_name, on_screen)
+        return True
+
     def add_combobox(self, wii_button: str, on_screen: bool, combobox: ttk.Combobox):
-        combobox.config(values=self.__combobox_options)
+        combobox.config(
+            values=self.__combobox_options,
+            validate="focusout",
+            validatecommand=lambda: self.__validate_match(
+                wii_button, on_screen, combobox
+            ),
+        )
+
+        combobox.bind(
+            "<<ComboboxSelected>>",
+            lambda event: self.__selection_changed(
+                wii_button, on_screen, combobox, event
+            ),
+        )
+        combobox.bind(
+            "<Return>",
+            lambda event: self.__validate_match(wii_button, on_screen, combobox),
+        )
+        combobox.bind("<FocusIn>", lambda event: combobox.selection_range(0, "end"))
 
         if on_screen:
             self.on_screen_boxes[wii_button] = combobox
         else:
             self.off_screen_boxes[wii_button] = combobox
 
-        self.__update_selections()
+        self.__wrap_internal(self.__update_selections)
 
     def add_value(self, option: KeybindingOption):
         self.values.append(option)
@@ -323,21 +402,27 @@ class KeybindingsComboboxes:
         for combobox in self.off_screen_boxes.values():
             combobox.config(values=self.__combobox_options)
 
-        self.__update_selections()
+        self.__wrap_internal(self.__update_selections)
 
-    def set_mapping(self, wii_button: str, on_screen: bool, option: Union[KeybindingOption, str, None]):
+    def set_mapping(
+        self,
+        wii_button: str,
+        on_screen: bool,
+        option: Union[KeybindingOption, str, None],
+    ):
         if isinstance(option, str):
             option = next((v for v in self.values if v.raw_key_name == option), None)
             if option is None:
                 print(f"Unknown key name: {option}", file=sys.stderr)
         if option is None:
             option = self.values[0]
-        
+
         if on_screen:
             self.on_screen_selections[wii_button] = option
         else:
             self.off_screen_selections[wii_button] = option
-        self.__update_selections()
+
+        self.__wrap_internal(self.__update_selections)
 
 
 class Window:
@@ -663,9 +748,7 @@ def main():
 
             pairs = zip(args[::2], args[1::2])
             for wiiButtonName, targetButtonName in pairs:
-                window.keybindings.set_mapping(
-                    wiiButtonName, True, targetButtonName
-                )
+                window.keybindings.set_mapping(wiiButtonName, True, targetButtonName)
 
         wiimote.send_message("keymapget", callback=received)
 
@@ -749,6 +832,13 @@ def main():
         switch_logic(ClosingLogic(window, wiimote))
 
     root.protocol("WM_DELETE_WINDOW", on_close)
+
+    def bind_new_key(wii_button: str, target_button: str, on_screen: bool):
+        if target_button in ("None", None):
+            target_button = ""
+        wiimote.send_message("bindkey", wii_button, target_button)
+
+    window.keybindings.on_new_mapping_selected = bind_new_key
 
     def send_calibration_data(calibration_logic):
         data = calibration_logic.step_data[1:5]

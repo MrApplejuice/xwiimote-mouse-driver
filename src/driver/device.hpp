@@ -38,12 +38,22 @@ class DevFailed : public std::exception {};
 class DevInitFailed : public DevFailed {};
 
 enum class WiimoteButton {
-    A, B, Plus, Minus, Home, One, Two, Up, Down, Left, Right, COUNT
+    A, B, Plus, Minus, Home, One, Two, Up, Down, Left, Right, COUNT, INVALID
 };
 
 extern std::map<int, WiimoteButton> XWIIMOTE_BUTTON_MAP;
 extern std::map<WiimoteButton, std::string> WIIMOTE_BUTTON_NAMES;
 extern std::map<WiimoteButton, std::string> WIIMOTE_BUTTON_READABLE_NAMES;
+
+template <typename T, typename U>
+static T rmap(const std::map<T, U>& map, const U& value, const T& notFound) {
+    for (auto& pair : map) {
+        if (pair.second == value) {
+            return pair.first;
+        }
+    }
+    return notFound;
+}
 
 struct WiimoteButtonStates {
     bool pressedButtons[(int) WiimoteButton::COUNT];
