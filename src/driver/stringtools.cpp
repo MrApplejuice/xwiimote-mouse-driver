@@ -29,9 +29,7 @@ std::vector<std::string> split(const std::string& str, char delim) {
             current += c;
         }
     }
-    if (current.length()) {
-        result.push_back(current);
-    }
+    result.push_back(current);
     return result;
 }
 

@@ -810,10 +810,6 @@ int main(int argc, char* argv[]) {
                     return eventResultBuffer.c_str();
                 }
                 if (command == "bindkey") {
-                    std::cout << "Bindkey" << std::endl;
-                    for (const std::string& p : parameters) {
-                        std::cout << "Parameter: " << p << std::endl;
-                    }
                     if (parameters.size() != 2) {
                         return "ERROR:Invalid parameter count";
                     }
@@ -829,6 +825,9 @@ int main(int argc, char* argv[]) {
                         wmouse.mapButton(parameters[0], keyName);
                     }
 
+                    for (auto btn : WIIMOTE_BUTTON_READABLE_NAMES) {
+                        config.stringOptions.erase("button_" + asciiLower(btn.second));
+                    }
                     for (auto& mapping : wmouse.getButtonMap()) {
                         config.stringOptions[
                             "button_" + asciiLower(WIIMOTE_BUTTON_READABLE_NAMES[mapping.first])
