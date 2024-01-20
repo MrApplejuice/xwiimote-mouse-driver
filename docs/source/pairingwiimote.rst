@@ -1,0 +1,3 @@
+Pairing the wiimote
+===================
+
