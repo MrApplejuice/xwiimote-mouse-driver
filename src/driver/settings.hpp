@@ -73,6 +73,8 @@ public:
 
         std::string line;
         while (std::getline(configFile, line)) {
+            line += "\n"; // Add back the newline so that the value-getline can engage with it
+            
             std::istringstream iss(line);
             std::string key, value;
             if (std::getline(iss, key, '=') && std::getline(iss, value)) {

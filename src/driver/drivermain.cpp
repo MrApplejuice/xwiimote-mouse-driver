@@ -413,39 +413,16 @@ public:
         return buttonMapper.getStringMappings();
     }
 
-    void clearWiiButtonAssignments(const std::string& wiiButton) {
-        WiimoteButton foundWiiButton = WiimoteButton::INVALID;
-        foundWiiButton = rmap(WIIMOTE_BUTTON_READABLE_NAMES, wiiButton, WiimoteButton::INVALID);
-        if (foundWiiButton == WiimoteButton::INVALID) {
-            foundWiiButton = rmap(WIIMOTE_BUTTON_NAMES, wiiButton, WiimoteButton::INVALID);
-        }
-        if (foundWiiButton == WiimoteButton::INVALID) {
-            return;
-        }
-        buttonMapper.clearButtonAssignments(foundWiiButton);
-    }
-
     void clearButtonMap() {
         buttonMapper.clearMapping();
     }
 
-    bool mapButton(const std::string& wiiButton, const std::string& evdevButton) {
-        WiimoteButton foundWiiButton = WiimoteButton::INVALID;
-        foundWiiButton = rmap(WIIMOTE_BUTTON_READABLE_NAMES, wiiButton, WiimoteButton::INVALID);
-        if (foundWiiButton == WiimoteButton::INVALID) {
-            foundWiiButton = rmap(WIIMOTE_BUTTON_NAMES, wiiButton, WiimoteButton::INVALID);
+    void mapButton(WiimoteButton button, const SupportedButton* evdevButton) {
+        if (!evdevButton) {
+            buttonMapper.clearButtonAssignments(button);
+        } else {
+            buttonMapper.addMapping(button, evdevButton->code);
         }
-        if (foundWiiButton == WiimoteButton::INVALID) {
-            return false;
-        }
-
-        auto evdevButtonSearch = findButtonByName(evdevButton);
-        if (!evdevButtonSearch) {
-            return false;
-        }
-
-        buttonMapper.addMapping(foundWiiButton, evdevButtonSearch->code);
-        return true;
     }
 
     const WiimoteButtonStates& getButtonStates() const {
@@ -567,6 +544,26 @@ void signalHandler(int signum) {
     interuptMainLoop = true;
 }
 
+WiimoteButton configButtonNameToWiimote(const std::string& name) {
+    static std::map<std::string, WiimoteButton> LOWERCASE_READABLE_NAMES;
+    if (LOWERCASE_READABLE_NAMES.size() == 0) {
+        for (auto& pair : WIIMOTE_BUTTON_READABLE_NAMES) {
+            LOWERCASE_READABLE_NAMES[asciiLower(pair.second)] = pair.first;
+        }
+    }
+
+    WiimoteButton wiiButton = rmap(
+        WIIMOTE_BUTTON_NAMES, name, WiimoteButton::INVALID
+    );
+    if (wiiButton == WiimoteButton::INVALID) {
+        try {
+            wiiButton = LOWERCASE_READABLE_NAMES.at(name);
+        }
+        catch (std::out_of_range& e) {}
+    }
+    return wiiButton;
+}
+
 int main(int argc, char* argv[]) {
     OptionsMap options;
     try {
@@ -653,15 +650,22 @@ int main(int argc, char* argv[]) {
     );
     wmouse.clearButtonMap();
     for (auto btnName : WIIMOTE_BUTTON_READABLE_NAMES) {
-        std::string key = asciiLower("button_" + btnName.second);
-        if (config.stringOptions.find(key) != config.stringOptions.end()) {
-            if (!wmouse.mapButton(btnName.second, config.stringOptions[key])) {
-                std::cerr << "Ignoring invalid button map: " 
-                    << btnName.second 
-                    << " to " 
-                    << config.stringOptions[key] << std::endl;
-            }
+        std::string wiiConfName = asciiLower("button_" + btnName.second);
+        auto foundConf = config.stringOptions.find(wiiConfName);
+        if (foundConf == config.stringOptions.end()) {
+            continue;
         }
+
+        const std::string& keyName = foundConf->second;
+        const SupportedButton* btn = findButtonByName(keyName);
+        if ((!btn) && (keyName != "")) {
+            std::cerr 
+                << "Ignoring invalid mapped button: " 
+                << keyName << std::endl;
+            continue;
+        }
+
+        wmouse.mapButton(btnName.first, btn);
     }
 
     std::cout << "Mouse driver started!" << std::endl;
@@ -813,26 +817,25 @@ int main(int argc, char* argv[]) {
                     if (parameters.size() != 2) {
                         return "ERROR:Invalid parameter count";
                     }
+
+                    WiimoteButton wiiButton = configButtonNameToWiimote(
+                        parameters[0]
+                    );
+                    if (wiiButton == WiimoteButton::INVALID) {
+                        return "ERROR:Invalid wii button";
+                    }
+
                     std::string keyName = trim(parameters[1]);
-
-                    // Test if valid
-                    if (parameters[1] == "" || (!wmouse.mapButton(parameters[0], keyName))) {
-                        return "ERROR:Invalid button";
-                    }
-                    // Now execute the button assignment
-                    wmouse.clearWiiButtonAssignments(parameters[0]);
-                    if (keyName != "") {
-                        wmouse.mapButton(parameters[0], keyName);
+                    const SupportedButton* key = findButtonByName(keyName);
+                    if ((!key) && (keyName != "")) {
+                        return "ERROR:Invalid key binding";
                     }
 
-                    for (auto btn : WIIMOTE_BUTTON_READABLE_NAMES) {
-                        config.stringOptions.erase("button_" + asciiLower(btn.second));
-                    }
-                    for (auto& mapping : wmouse.getButtonMap()) {
-                        config.stringOptions[
-                            "button_" + asciiLower(WIIMOTE_BUTTON_READABLE_NAMES[mapping.first])
-                        ] = mapping.second;
-                    }
+                    wmouse.mapButton(wiiButton, key);
+
+                    const std::string wiiConfName = 
+                        "button_" + asciiLower(WIIMOTE_BUTTON_READABLE_NAMES[wiiButton]);
+                    config.stringOptions[wiiConfName] = keyName;
                     config.writeConfigFile();
                     return "OK";
                 }

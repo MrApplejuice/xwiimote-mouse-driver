@@ -164,7 +164,13 @@ void ControlSocket :: processEvents(CommandHandleFunction handler) {
         }
 
         std::string result = handler(command.name, command.parameters);
-        command.handler->sendMessage(result + "\n");
+        try {
+            command.handler->sendMessage(result + "\n");
+        }
+        catch (const std::exception& e) {
+            // Please find out what the actual exception type is
+            std::cerr << "Error sending message: " << e.what() << std::endl;
+        }
     }
     commands.clear();
 }
@@ -173,7 +179,13 @@ void ControlSocket :: broadcastMessage(const std::string& msg) {
     std::lock_guard<std::mutex> lock(sharedResourceMutex);
 
     for (ConnectionHandler* ch : handlerThreads) {
-        ch->sendMessage(msg);
+        try {
+            ch->sendMessage(msg);
+        }
+        catch (const std::exception& e) {
+            // Please find out what the actual exception type is
+            std::cerr << "Error sending message: " << e.what() << std::endl;
+        }
     }
 }
 
