@@ -1,7 +1,7 @@
 .. Xwiimote Mouse Driver documentation master file, created by
-   sphinx-quickstart on Sat Jan 20 15:42:51 2024.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+    sphinx-quickstart on Sat Jan 20 15:42:51 2024.
+    You can adapt this file completely to your liking, but it should at least
+    contain the root `toctree` directive.
 
 Xwiimote Mouse Driver
 =====================
@@ -23,15 +23,15 @@ Features
 
 - Use the WiiMote as a pointing device on any Linux GUI
 - The driver contains a configuration utility for:
-   - Calibrating the WiiMote sensor to match your screen setup
-   - Allow to map keys to arbitrary mouse/keyboard/gamepad buttons
+  - Calibrating the WiiMote sensor to match your screen setup
+  - Allow to map keys to arbitrary mouse/keyboard/gamepad buttons
 
 What do you need to run the Xwiimote Mouse Driver?
 --------------------------------------------------
 
 .. image:: _static/wiimote.jpg
-   :height: 15em
-   :align: center
+  :height: 15em
+  :align: center
 
 
 1. A WiiMote; the thing shown in the image above.
@@ -48,12 +48,11 @@ What do you need to run the Xwiimote Mouse Driver?
 4. Root access to the machine you want to use the driver on (in most cases).
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Ready to start?
+  :maxdepth: 2
+  :caption: Ready to start?
 
-   gettingstarted.rst
-   pairingwiimote.rst
-   driverconfig.rst
+  gettingstarted.rst
+  driverconfig.rst
 
 Why does this project exist? 
 ----------------------------
