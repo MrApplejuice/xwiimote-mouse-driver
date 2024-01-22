@@ -21,7 +21,10 @@ using a WiiMote.
 Features
 --------
 
-- **Bullet points**
+- Use the WiiMote as a pointing device on any Linux GUI
+- The driver contains a configuration utility for:
+   - Calibrating the WiiMote sensor to match your screen setup
+   - Allow to map keys to arbitrary mouse/keyboard/gamepad buttons
 
 What do you need to run the Xwiimote Mouse Driver?
 --------------------------------------------------
@@ -33,8 +36,10 @@ What do you need to run the Xwiimote Mouse Driver?
 
 1. A WiiMote; the thing shown in the image above.
 
-2. A Linux computer with a working connection and the `hid-wiimote` kernel 
-   driver running.
+2. A Linux computer with a compatible bluetooth device and the 
+   `hid-wiimote` kernel driver running. I have no clue which bluetooth
+   devices are compatbile and which are not, but I have seen mainly older
+   bluetooth dongles not being able to detect the WiiMote. 
 
 3. A standalone Wii sensor bar. This is one that works without a Wii console.
    There are USB-powered or battery powered sensor bars out there hat one can
