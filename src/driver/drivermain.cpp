@@ -614,6 +614,72 @@ WiimoteButton configButtonNameToWiimote(const std::string& name) {
     return wiiButton;
 }
 
+void applyDeviceConfigurations(WiiMouse& wmouse, Config& config) {
+    static bool AppliedDefaults = false;
+    if (!AppliedDefaults) {
+        Vector3 defX, defY;
+        wmouse.getCalibrationVectors(defX, defY);
+        config.provideDefault("calmatX", vector3ToString(defX));
+        config.provideDefault("calmatY", vector3ToString(defY));
+        config.provideDefault(
+            "screen_top_left",
+            vector3ToString(Vector3(0, 0, 0))
+        );
+        config.provideDefault(
+            "screen_bottom_right",
+            vector3ToString(Vector3(10000, 10000, 0))
+        );
+        auto keyMappings = wmouse.getButtonMap();
+        for (auto& mapping : keyMappings) {
+            config.provideDefault(
+                mapping.first.toConfigurationKey(),
+                mapping.second
+            );
+        }
+        AppliedDefaults = true;
+    }
+
+    wmouse.setCalibrationVectors(
+        config.vectorOptions["calmatX"],
+        config.vectorOptions["calmatY"]
+    );
+    wmouse.setScreenArea(
+        config.vectorOptions["screen_top_left"].values[0],
+        config.vectorOptions["screen_top_left"].values[1],
+        config.vectorOptions["screen_bottom_right"].values[0],
+        config.vectorOptions["screen_bottom_right"].values[1]
+    );
+
+    wmouse.clearButtonMap();
+    static const std::vector<std::string> ONOFFSCREEN_SUFFIXES = {
+        "",
+        "_offscreen"
+    };
+    for (auto btnName : WIIMOTE_BUTTON_READABLE_NAMES) {
+        for (auto suffix : ONOFFSCREEN_SUFFIXES) {
+            std::string wiiConfName = asciiLower("button_" + btnName.second + suffix);
+            auto foundConf = config.stringOptions.find(wiiConfName);
+            if (foundConf == config.stringOptions.end()) {
+                continue;
+            }
+
+            const bool ir = suffix == ONOFFSCREEN_SUFFIXES[0];
+
+            const std::string& keyName = foundConf->second;
+            const SupportedButton* btn = findButtonByName(keyName);
+            if ((!btn) && (keyName != "")) {
+                std::cerr 
+                    << "Ignoring invalid mapped button: " 
+                    << keyName << std::endl;
+                continue;
+            }
+
+            wmouse.mapButton(btnName.first, ir, btn);
+        }
+    }
+
+}
+
 int main(int argc, char* argv[]) {
     OptionsMap options;
     try {
@@ -666,65 +732,7 @@ int main(int argc, char* argv[]) {
     } 
 
     WiiMouse wmouse(monitor.get_device(0));
-    {
-        Vector3 defX, defY;
-        wmouse.getCalibrationVectors(defX, defY);
-        config.provideDefault("calmatX", vector3ToString(defX));
-        config.provideDefault("calmatY", vector3ToString(defY));
-        config.provideDefault(
-            "screen_top_left",
-            vector3ToString(Vector3(0, 0, 0))
-        );
-        config.provideDefault(
-            "screen_bottom_right",
-            vector3ToString(Vector3(10000, 10000, 0))
-        );
-
-        auto keyMappings = wmouse.getButtonMap();
-        for (auto& mapping : keyMappings) {
-            config.provideDefault(
-                mapping.first.toConfigurationKey(),
-                mapping.second
-            );
-        }
-    }
-    wmouse.setCalibrationVectors(
-        config.vectorOptions["calmatX"],
-        config.vectorOptions["calmatY"]
-    );
-    wmouse.setScreenArea(
-        config.vectorOptions["screen_top_left"].values[0],
-        config.vectorOptions["screen_top_left"].values[1],
-        config.vectorOptions["screen_bottom_right"].values[0],
-        config.vectorOptions["screen_bottom_right"].values[1]
-    );
-    wmouse.clearButtonMap();
-    static const std::vector<std::string> ONOFFSCREEN_SUFFIXES = {
-        "",
-        "_offscreen"
-    };
-    for (auto btnName : WIIMOTE_BUTTON_READABLE_NAMES) {
-        for (auto suffix : ONOFFSCREEN_SUFFIXES) {
-            std::string wiiConfName = asciiLower("button_" + btnName.second + suffix);
-            auto foundConf = config.stringOptions.find(wiiConfName);
-            if (foundConf == config.stringOptions.end()) {
-                continue;
-            }
-
-            const bool ir = suffix == ONOFFSCREEN_SUFFIXES[0];
-
-            const std::string& keyName = foundConf->second;
-            const SupportedButton* btn = findButtonByName(keyName);
-            if ((!btn) && (keyName != "")) {
-                std::cerr 
-                    << "Ignoring invalid mapped button: " 
-                    << keyName << std::endl;
-                continue;
-            }
-
-            wmouse.mapButton(btnName.first, ir, btn);
-        }
-    }
+    applyDeviceConfigurations(wmouse, config);
 
     std::cout << "Mouse driver started!" << std::endl;
     signal(SIGINT, signalHandler);
