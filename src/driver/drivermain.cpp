@@ -681,6 +681,8 @@ void applyDeviceConfigurations(WiiMouse& wmouse, Config& config) {
 }
 
 int main(int argc, char* argv[]) {
+    signal(SIGINT, signalHandler);
+
     OptionsMap options;
     try {
         options = parseOptions(argc, argv);
@@ -721,245 +723,261 @@ int main(int argc, char* argv[]) {
     ControlSocket& csocket = *socketref;
     std::cout << "Socket address: " << socketAddr << std::endl;
 
-    XwiimoteMonitor monitor;
-    monitor.poll();
-    if (monitor.count() <= 0) {
-        std::cout << "No Wiimote found. Please pair a new Wiimote now." << std::endl;
-        while (monitor.count() <= 0) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            monitor.poll();
-        }
-    } 
-
-    WiiMouse wmouse(monitor.get_device(0));
-    applyDeviceConfigurations(wmouse, config);
-
-    std::cout << "Mouse driver started!" << std::endl;
-    signal(SIGINT, signalHandler);
-
-    char irMessageBuffer[1024];
-    WiimoteButtonStates buttonStates;
     while (!interuptMainLoop) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        wmouse.process();
-        std::string eventResultBuffer;
-        csocket.processEvents(
-            [&wmouse, &config, &eventResultBuffer](const std::string& command, const std::vector<std::string>& parameters) {
-                //std::cout << "Command: " << command << std::endl;
-                //for (const std::string& p : parameters) {
-                //    std::cout << "Parameter: " << p << std::endl;
-                //}
+        Xwiimote::Ptr wiimote;
+        {
+            XwiimoteMonitor monitor;
+            monitor.poll();
+            if (monitor.count() <= 0) {
+                std::cout << "No Wiimote found. Please pair a new Wiimote now." << std::endl;
+                while ((monitor.count() <= 0) && (!interuptMainLoop)) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    monitor.poll();
+                }
+            }
+            if (monitor.count() > 0) {
+                wiimote = monitor.get_device(0);
+            }
+        }
+        if (interuptMainLoop) {
+            break;
+        }
 
-                if (command == "mouse") {
-                    if (parameters.size() == 1) {
-                        if (parameters[0] == "on") {
-                            wmouse.mouseEnabled = true;
-                            return "OK";
-                        } else if (parameters[0] == "off") {
-                            wmouse.mouseEnabled = false;
-                            return "OK";
+        WiiMouse wmouse(wiimote);
+        applyDeviceConfigurations(wmouse, config);
+
+        std::cout << "Wiimote detected. (Re-)starting mouse driver" << std::endl;
+
+        char irMessageBuffer[1024];
+        WiimoteButtonStates buttonStates;
+        while (!interuptMainLoop) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            try {
+                wmouse.process();
+            }
+            catch (const DevDisappeared& e) {
+                std::cout << "Wiimote disconnected." << std::endl;
+                break;
+            }
+            std::string eventResultBuffer;
+            csocket.processEvents(
+                [&wmouse, &config, &eventResultBuffer](const std::string& command, const std::vector<std::string>& parameters) {
+                    //std::cout << "Command: " << command << std::endl;
+                    //for (const std::string& p : parameters) {
+                    //    std::cout << "Parameter: " << p << std::endl;
+                    //}
+
+                    if (command == "mouse") {
+                        if (parameters.size() == 1) {
+                            if (parameters[0] == "on") {
+                                wmouse.mouseEnabled = true;
+                                return "OK";
+                            } else if (parameters[0] == "off") {
+                                wmouse.mouseEnabled = false;
+                                return "OK";
+                            }
+                            return "ERROR:Invalid parameter";
                         }
-                        return "ERROR:Invalid parameter";
                     }
-                }
-                if (command == "cal100") {
-                    if (parameters.size() == 6) {
-                        Vector3 x, y;
-                        try {
-                            x = Vector3(
-                                Scalar(std::stoll(parameters[0]), 100),
-                                Scalar(std::stoll(parameters[1]), 100),
-                                Scalar(std::stoll(parameters[2]), 100)
-                            );
-                            y = Vector3(
-                                Scalar(std::stoll(parameters[3]), 100),
-                                Scalar(std::stoll(parameters[4]), 100),
-                                Scalar(std::stoll(parameters[5]), 100)
-                            );
-                        } 
-                        catch (std::invalid_argument& e) {
-                            return "ERROR:Invalid parameter";
+                    if (command == "cal100") {
+                        if (parameters.size() == 6) {
+                            Vector3 x, y;
+                            try {
+                                x = Vector3(
+                                    Scalar(std::stoll(parameters[0]), 100),
+                                    Scalar(std::stoll(parameters[1]), 100),
+                                    Scalar(std::stoll(parameters[2]), 100)
+                                );
+                                y = Vector3(
+                                    Scalar(std::stoll(parameters[3]), 100),
+                                    Scalar(std::stoll(parameters[4]), 100),
+                                    Scalar(std::stoll(parameters[5]), 100)
+                                );
+                            } 
+                            catch (std::invalid_argument& e) {
+                                return "ERROR:Invalid parameter";
+                            }
+                            catch (std::out_of_range& e) {
+                                return "ERROR:Invalid parameter";
+                            }
+                            wmouse.setCalibrationVectors(x, y);
+                            config.vectorOptions["calmatX"] = x;
+                            config.vectorOptions["calmatY"] = y;
+                            config.writeConfigFile();
+                            return "OK";
                         }
-                        catch (std::out_of_range& e) {
-                            return "ERROR:Invalid parameter";
-                        }
-                        wmouse.setCalibrationVectors(x, y);
-                        config.vectorOptions["calmatX"] = x;
-                        config.vectorOptions["calmatY"] = y;
-                        config.writeConfigFile();
-                        return "OK";
                     }
-                }
-                if (command == "getscreenarea100") {
-                    Vector3f topLeftF, bottomRightF;
-                    wmouse.getScreenArea(topLeftF, bottomRightF);
-
-                    Vector3 topLeft = topLeftF.toVector3(100);
-                    Vector3 bottomRight = bottomRightF.toVector3(100);
-
-                    std::stringstream ss;
-                    ss << "OK" 
-                        << ":" << topLeft.values[0].value 
-                        << ":" << topLeft.values[1].value 
-                        << ":" << bottomRight.values[0].value
-                        << ":" << bottomRight.values[1].value;
-                    eventResultBuffer = ss.str();
-                    return eventResultBuffer.c_str();
-                }
-                if (command == "screenarea100") {
-                    if (parameters.size() == 4) {
-                        Scalar top, left, bottom, right;
-                        try {
-                            left = Scalar(std::stoll(parameters[0]), 100);
-                            top = Scalar(std::stoll(parameters[1]), 100);
-                            right = Scalar(std::stoll(parameters[2]), 100);
-                            bottom = Scalar(std::stoll(parameters[3]), 100);
-                        } 
-                        catch (std::invalid_argument& e) {
-                            return "ERROR:Invalid parameter";
-                        }
-                        catch (std::out_of_range& e) {
-                            return "ERROR:Invalid parameter";
-                        } 
-                        wmouse.setScreenArea(left, top, right, bottom);
-
+                    if (command == "getscreenarea100") {
                         Vector3f topLeftF, bottomRightF;
                         wmouse.getScreenArea(topLeftF, bottomRightF);
-                        config.vectorOptions["screen_top_left"] 
-                            = topLeftF.toVector3(1000);
-                        config.vectorOptions["screen_bottom_right"] 
-                            = bottomRightF.toVector3(1000);
+
+                        Vector3 topLeft = topLeftF.toVector3(100);
+                        Vector3 bottomRight = bottomRightF.toVector3(100);
+
+                        std::stringstream ss;
+                        ss << "OK" 
+                            << ":" << topLeft.values[0].value 
+                            << ":" << topLeft.values[1].value 
+                            << ":" << bottomRight.values[0].value
+                            << ":" << bottomRight.values[1].value;
+                        eventResultBuffer = ss.str();
+                        return eventResultBuffer.c_str();
+                    }
+                    if (command == "screenarea100") {
+                        if (parameters.size() == 4) {
+                            Scalar top, left, bottom, right;
+                            try {
+                                left = Scalar(std::stoll(parameters[0]), 100);
+                                top = Scalar(std::stoll(parameters[1]), 100);
+                                right = Scalar(std::stoll(parameters[2]), 100);
+                                bottom = Scalar(std::stoll(parameters[3]), 100);
+                            } 
+                            catch (std::invalid_argument& e) {
+                                return "ERROR:Invalid parameter";
+                            }
+                            catch (std::out_of_range& e) {
+                                return "ERROR:Invalid parameter";
+                            } 
+                            wmouse.setScreenArea(left, top, right, bottom);
+
+                            Vector3f topLeftF, bottomRightF;
+                            wmouse.getScreenArea(topLeftF, bottomRightF);
+                            config.vectorOptions["screen_top_left"] 
+                                = topLeftF.toVector3(1000);
+                            config.vectorOptions["screen_bottom_right"] 
+                                = bottomRightF.toVector3(1000);
+                            config.writeConfigFile();
+                            return "OK";
+                        } else {
+                            return "ERROR:Invalid parameter";
+                        }
+                    }
+                    if (command == "keycount") {
+                        std::stringstream ss;
+                        ss << "OK:" << SUPPORTED_BUTTONS.size();
+                        eventResultBuffer = ss.str();
+                        return eventResultBuffer.c_str();
+                    }
+                    if (command == "keyget") {
+                        if (parameters.size() != 1) {
+                            return "ERROR:Single key index expected";
+                        }
+                        int index;
+                        try {
+                            index = std::stoi(parameters[0]);
+                        }
+                        catch (std::invalid_argument& e) {
+                            return "ERROR:Invalid index";
+                        }
+                        catch (std::out_of_range& e) {
+                            return "ERROR:Invalid index";
+                        }
+
+                        if ((index < 0) || (index >= (int) SUPPORTED_BUTTONS.size())) {
+                            return "ERROR:Out of bounds";
+                        }
+
+                        auto key = SUPPORTED_BUTTONS[index];
+
+                        std::stringstream ss;
+                        ss << "OK:" 
+                            << key.rawKeyName 
+                            << ":" << (key.name ? key.name : "")
+                            << ":" << key.category;
+                        eventResultBuffer = ss.str();
+                        return eventResultBuffer.c_str();
+                    }
+                    if (command == "keymapget") {
+                        auto keymap = wmouse.getButtonMap();
+                        std::stringstream ss;
+                        ss << "OK:";
+                        for (auto& mapping : keymap) {
+                            ss << mapping.first.toProtocolString()
+                                << ":" << mapping.second << ":";
+                        }
+                        eventResultBuffer = ss.str();
+                        eventResultBuffer.pop_back(); // remove trailing ':'
+                        return eventResultBuffer.c_str();
+                    }
+                    if (command == "bindkey") {
+                        if (parameters.size() != 3) {
+                            return "ERROR:Invalid parameter count";
+                        }
+
+                        WiimoteButton wiiButton = configButtonNameToWiimote(
+                            parameters[0]
+                        );
+                        if (wiiButton == WiimoteButton::INVALID) {
+                            return "ERROR:Invalid wii button";
+                        }
+
+                        bool ir;
+                        if (parameters[1] == "0") {
+                            ir = false;
+                        } else if (parameters[1] == "1") {
+                            ir = true;
+                        } else {
+                            return "ERROR:Invalid ir value";
+                        }
+
+                        std::string keyName = trim(parameters[2]);
+                        const SupportedButton* key = findButtonByName(keyName);
+                        if ((!key) && (keyName != "")) {
+                            return "ERROR:Invalid key binding";
+                        }
+
+                        wmouse.mapButton(wiiButton, ir, key);
+
+                        const WiimoteButtonMappingState state = {wiiButton, ir};
+                        config.stringOptions[state.toConfigurationKey()] = keyName;
                         config.writeConfigFile();
                         return "OK";
-                    } else {
-                        return "ERROR:Invalid parameter";
                     }
+                    return "ERROR:Invalid command";
                 }
-                if (command == "keycount") {
-                    std::stringstream ss;
-                    ss << "OK:" << SUPPORTED_BUTTONS.size();
-                    eventResultBuffer = ss.str();
-                    return eventResultBuffer.c_str();
-                }
-                if (command == "keyget") {
-                    if (parameters.size() != 1) {
-                        return "ERROR:Single key index expected";
-                    }
-                    int index;
-                    try {
-                        index = std::stoi(parameters[0]);
-                    }
-                    catch (std::invalid_argument& e) {
-                        return "ERROR:Invalid index";
-                    }
-                    catch (std::out_of_range& e) {
-                        return "ERROR:Invalid index";
-                    }
+            );
 
-                    if ((index < 0) || (index >= (int) SUPPORTED_BUTTONS.size())) {
-                        return "ERROR:Out of bounds";
-                    }
-
-                    auto key = SUPPORTED_BUTTONS[index];
-
-                    std::stringstream ss;
-                    ss << "OK:" 
-                        << key.rawKeyName 
-                        << ":" << (key.name ? key.name : "")
-                        << ":" << key.category;
-                    eventResultBuffer = ss.str();
-                    return eventResultBuffer.c_str();
-                }
-                if (command == "keymapget") {
-                    auto keymap = wmouse.getButtonMap();
-                    std::stringstream ss;
-                    ss << "OK:";
-                    for (auto& mapping : keymap) {
-                        ss << mapping.first.toProtocolString()
-                            << ":" << mapping.second << ":";
-                    }
-                    eventResultBuffer = ss.str();
-                    eventResultBuffer.pop_back(); // remove trailing ':'
-                    return eventResultBuffer.c_str();
-                }
-                if (command == "bindkey") {
-                    if (parameters.size() != 3) {
-                        return "ERROR:Invalid parameter count";
-                    }
-
-                    WiimoteButton wiiButton = configButtonNameToWiimote(
-                        parameters[0]
-                    );
-                    if (wiiButton == WiimoteButton::INVALID) {
-                        return "ERROR:Invalid wii button";
-                    }
-
-                    bool ir;
-                    if (parameters[1] == "0") {
-                        ir = false;
-                    } else if (parameters[1] == "1") {
-                        ir = true;
-                    } else {
-                        return "ERROR:Invalid ir value";
-                    }
-
-                    std::string keyName = trim(parameters[2]);
-                    const SupportedButton* key = findButtonByName(keyName);
-                    if ((!key) && (keyName != "")) {
-                        return "ERROR:Invalid key binding";
-                    }
-
-                    wmouse.mapButton(wiiButton, ir, key);
-
-                    const WiimoteButtonMappingState state = {wiiButton, ir};
-                    config.stringOptions[state.toConfigurationKey()] = keyName;
-                    config.writeConfigFile();
-                    return "OK";
-                }
-                return "ERROR:Invalid command";
+            // Send raw ir data
+            for (int i = 0; i < 4; i++) {
+                IRData d = wmouse.getIrSpot(i);
+                snprintf(
+                    irMessageBuffer,
+                    1024,
+                    "ir:%i:%i:%i:%i\n",
+                    i,
+                    (int) d.valid,
+                    (int) d.point.values[0].undivide().value,
+                    (int) d.point.values[1].undivide().value
+                );
+                csocket.broadcastMessage(irMessageBuffer);
             }
-        );
 
-        // Send raw ir data
-        for (int i = 0; i < 4; i++) {
-            IRData d = wmouse.getIrSpot(i);
-            snprintf(
-                irMessageBuffer,
-                1024,
-                "ir:%i:%i:%i:%i\n",
-                i,
-                (int) d.valid,
-                (int) d.point.values[0].undivide().value,
-                (int) d.point.values[1].undivide().value
-            );
-            csocket.broadcastMessage(irMessageBuffer);
-        }
+            // Send clustered left/right data
+            if (wmouse.hasValidLeftRight()) {
+                snprintf(
+                    irMessageBuffer,
+                    1024,
+                    "lr:%i:%i:%i:%i\n",
+                    (int) wmouse.getLeftPoint().values[0].value,
+                    (int) wmouse.getLeftPoint().values[1].value,
+                    (int) wmouse.getRightPoint().values[0].value,
+                    (int) wmouse.getRightPoint().values[1].value
+                );
+                csocket.broadcastMessage(irMessageBuffer);
+            } else {
+                csocket.broadcastMessage("lr:invalid\n");
+            }
 
-        // Send clustered left/right data
-        if (wmouse.hasValidLeftRight()) {
-            snprintf(
-                irMessageBuffer,
-                1024,
-                "lr:%i:%i:%i:%i\n",
-                (int) wmouse.getLeftPoint().values[0].value,
-                (int) wmouse.getLeftPoint().values[1].value,
-                (int) wmouse.getRightPoint().values[0].value,
-                (int) wmouse.getRightPoint().values[1].value
-            );
-            csocket.broadcastMessage(irMessageBuffer);
-        } else {
-            csocket.broadcastMessage("lr:invalid\n");
-        }
-
-        if (buttonStates != wmouse.getButtonStates()) {
-            buttonStates = wmouse.getButtonStates();
-            snprintf(
-                irMessageBuffer,
-                1024,
-                "b:%s\n",
-                buttonStates.toMsgState().c_str()
-            );
-            csocket.broadcastMessage(irMessageBuffer);
+            if (buttonStates != wmouse.getButtonStates()) {
+                buttonStates = wmouse.getButtonStates();
+                snprintf(
+                    irMessageBuffer,
+                    1024,
+                    "b:%s\n",
+                    buttonStates.toMsgState().c_str()
+                );
+                csocket.broadcastMessage(irMessageBuffer);
+            }
         }
     }
 

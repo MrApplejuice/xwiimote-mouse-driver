@@ -27,12 +27,15 @@ add_executable(
         src/driver/virtualmouse.hpp
         src/driver/virtualmouse.cpp
 )
+set_target_properties(mouse-test PROPERTIES CXX_STANDARD 17)
 target_link_libraries(mouse-test PkgConfig::evdev PkgConfig::xwiimote)
 
 add_executable(xwiimote-test src/testapps/xwiimote-test.cpp)
+set_target_properties(xwiimote-test PROPERTIES CXX_STANDARD 17)
 target_link_libraries(xwiimote-test PkgConfig::evdev PkgConfig::xwiimote)
 
 add_executable(test-maths src/testapps/testmaths.cpp src/driver/intlinalg.hpp)
+set_target_properties(test-maths PROPERTIES CXX_STANDARD 17)
 
 # Actual mouse driver
 ExternalProject_Add(
@@ -66,6 +69,8 @@ add_executable(
         src/driver/driverextra.hpp
         src/driver/driverextra.cpp
 )
+set_target_properties(xwiimote-mouse-driver PROPERTIES CXX_STANDARD 17)
+
 add_dependencies(xwiimote-mouse-driver sockpp-install)
 target_include_directories(
     xwiimote-mouse-driver

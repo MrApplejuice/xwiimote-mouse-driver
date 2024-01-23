@@ -25,6 +25,7 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 #include <chrono>
 #include <memory>
 #include <exception>
+#include <filesystem>
 
 #include <csignal>
 
@@ -36,6 +37,7 @@ std::ostream& operator<<(std::ostream& out, const xwii_event_abs& abs);
 
 class DevFailed : public std::exception {};
 class DevInitFailed : public DevFailed {};
+class DevDisappeared : public DevFailed {};
 
 enum class WiimoteButton {
     A, B, Plus, Minus, Home, One, Two, Up, Down, Left, Right, COUNT, INVALID
@@ -98,6 +100,7 @@ public:
     typedef std::shared_ptr<Xwiimote> Ptr;
 private:
     XwiiRefcountRef<xwii_iface*> dev;
+    std::string devPath;
 
     void processAccel(xwii_event& ev) {
         accelX = ev.v.abs->x;
@@ -109,9 +112,10 @@ public:
     int accelX, accelY, accelZ;
     xwii_event_abs irdata[4];
 
-    Xwiimote(std::string devName) {
+    Xwiimote(std::string _devName) {
+        devPath = _devName;
         xwii_iface* rawdev;
-        if (xwii_iface_new(&rawdev, devName.c_str()) < 0) {
+        if (xwii_iface_new(&rawdev, devPath.c_str()) < 0) {
             throw DevInitFailed();
         }
         dev = XwiiRefcountRef<xwii_iface*>(
@@ -129,6 +133,11 @@ public:
     }
 
     void poll() {
+        std::filesystem::path devPath = std::filesystem::path(this->devPath);
+        if (!std::filesystem::exists(devPath)) {
+            throw DevDisappeared();
+        }
+
         int err;
         xwii_event ev;
         while (true) {
