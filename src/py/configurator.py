@@ -746,9 +746,14 @@ def main():
                 print("ERROR getting keymap: ", args)
                 return
 
-            pairs = zip(args[::2], args[1::2])
-            for wiiButtonName, targetButtonName in pairs:
-                window.keybindings.set_mapping(wiiButtonName, True, targetButtonName)
+            pairs = zip(args[::3], args[1::3], args[2::3])
+            for wiiButtonName, irState, targetButtonName in pairs:
+                irState = bool(int(irState))
+                window.keybindings.set_mapping(
+                    wiiButtonName,
+                    irState,
+                    targetButtonName,
+                )
 
         wiimote.send_message("keymapget", callback=received)
 
@@ -836,7 +841,8 @@ def main():
     def bind_new_key(wii_button: str, target_button: str, on_screen: bool):
         if target_button in ("None", None):
             target_button = ""
-        wiimote.send_message("bindkey", wii_button, target_button)
+        ir = "1" if on_screen else "0"
+        wiimote.send_message("bindkey", wii_button, ir, target_button)
 
     window.keybindings.on_new_mapping_selected = bind_new_key
 

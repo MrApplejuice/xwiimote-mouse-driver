@@ -16,6 +16,8 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 
 #include "virtualmouse.hpp"
 
+#include <unordered_map>
+
 const std::vector<SupportedButton> SUPPORTED_BUTTONS = {
      {BTN_LEFT, "BTN_LEFT", "Left Button", "Mouse"},
      {BTN_RIGHT, "BTN_RIGHT", "Right Button", "Mouse"},
@@ -274,24 +276,36 @@ const std::vector<SupportedButton> SUPPORTED_BUTTONS = {
 };
 
 const SupportedButton* findButtonByName(const std::string& rawName) {
-    for (auto& button : SUPPORTED_BUTTONS) {
-        if (button.name && (button.name == rawName)) {
-            return &button;
+    static std::unordered_map<std::string, const SupportedButton*> QUICK_LOOKUP;
+    if (QUICK_LOOKUP.empty()) {
+        for (auto& button : SUPPORTED_BUTTONS) {
+            if (button.name) {
+                QUICK_LOOKUP[button.name] = &button;
+            }
         }
-        if (button.rawKeyName == rawName) {
-            return &button;
+        for (auto& button : SUPPORTED_BUTTONS) {
+            QUICK_LOOKUP[button.rawKeyName] = &button;
         }
     }
 
-    return nullptr;
+    auto it = QUICK_LOOKUP.find(rawName);
+    if (it == QUICK_LOOKUP.end()) {
+        return nullptr;
+    }
+    return it->second;
 }
 
 const SupportedButton* findButtonByCode(int id) {
-    for (auto& button : SUPPORTED_BUTTONS) {
-        if (button.code == id) {
-            return &button;
+    static std::unordered_map<int, const SupportedButton*> QUICK_LOOKUP;
+    if (QUICK_LOOKUP.empty()) {
+        for (auto& button : SUPPORTED_BUTTONS) {
+            QUICK_LOOKUP[button.code] = &button;
         }
     }
 
-    return nullptr;
+    auto it = QUICK_LOOKUP.find(id);
+    if (it == QUICK_LOOKUP.end()) {
+        return nullptr;
+    }
+    return it->second;
 }

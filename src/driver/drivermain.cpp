@@ -89,28 +89,71 @@ public:
     }
 };
 
+struct WiimoteButtonMappingState {
+    WiimoteButton button;
+    bool irVisible;
+
+    bool operator==(const WiimoteButtonMappingState& other) const {
+        return (button == other.button) && (irVisible == other.irVisible);
+    }
+
+    std::string toProtocolString() const {
+        std::string result = WIIMOTE_BUTTON_NAMES[button];
+        if (irVisible) {
+            result += ":1";
+        } else {
+            result += ":0";
+        }
+        return result;
+    }
+
+    std::string toConfigurationKey() const {
+        std::string result = "button_";
+        result += asciiLower(WIIMOTE_BUTTON_READABLE_NAMES[button]);
+        if (irVisible) {
+            result += "_offscreen";
+        }
+        return result;
+    }
+};
+
+static bool operator<(
+    const WiimoteButtonMappingState& a,
+    const WiimoteButtonMappingState& b
+) {
+    if (a.button < b.button) {
+        return true;
+    }
+    if (a.button > b.button) {
+        return false;
+    }
+    return a.irVisible < b.irVisible;
+}
+
 class WMPButtonMapper : public WiiMouseProcessingModule {
 private:
-    std::map<WiimoteButton, std::vector<int>> wiiToEvdevMap;
+    std::map<WiimoteButtonMappingState, std::vector<int>> wiiToEvdevMap;
 public:
-    void clearButtonAssignments(WiimoteButton wiiButton) {
-        wiiToEvdevMap.erase(wiiButton);
+    void clearButtonAssignments(WiimoteButton wiiButton, bool ir) {
+        WiimoteButtonMappingState key = {wiiButton, ir};
+        wiiToEvdevMap.erase(key);
     }
 
     void clearMapping() {
         wiiToEvdevMap.clear();
     }
 
-    void addMapping(WiimoteButton wiiButton, int evdevButton) {
-        auto& v = wiiToEvdevMap[wiiButton];
+    void addMapping(WiimoteButton wiiButton, bool ir, int evdevButton) {
+        WiimoteButtonMappingState key = {wiiButton, ir};
+        auto& v = wiiToEvdevMap[key];
         if (std::find(v.begin(), v.end(), evdevButton) != v.end()) {
             return;
         }
         v.push_back(evdevButton);
     }
 
-    std::map<WiimoteButton, std::string> getStringMappings() const {
-        std::map<WiimoteButton, std::string> result;
+    std::map<WiimoteButtonMappingState, std::string> getStringMappings() const {
+        std::map<WiimoteButtonMappingState, std::string> result;
         for (auto& mapping : wiiToEvdevMap) {
             for (int evdevButton : mapping.second) {
                 const SupportedButton* btn = findButtonByCode(evdevButton);
@@ -141,31 +184,35 @@ public:
             if (assignedButtons >= MAX_BUTTONS) {
                 break;
             }
-            if (!button) {
+            if (!button || (button.ns != ButtonNamespace::WII)) {
                 break;
             }
+            WiimoteButtonMappingState key = {
+                (WiimoteButton) button.buttonId, prev.nValidIrSpots > 0
+            };
             if (button.ns == ButtonNamespace::WII) {
                 if (!button.state) {
                     continue;
                 }
-                auto mapping = wiiToEvdevMap.find((WiimoteButton) button.buttonId);
-                if (mapping != wiiToEvdevMap.end()) {
-                    for (int evdevButton : mapping->second) {
-                        if (assignedButtons >= MAX_BUTTONS) {
-                            break;
-                        }
-                        pressedButtons[assignedButtons++] = NamespacedButtonState(
-                            ButtonNamespace::VMOUSE, evdevButton, button.state
-                        );
-                        lastPressedButtons.erase(
-                            std::remove(
-                                lastPressedButtons.begin(),
-                                lastPressedButtons.end(),
-                                evdevButton
-                            ),
-                            lastPressedButtons.end()
-                        );
+                auto mapping = wiiToEvdevMap.find(key);
+                if (mapping == wiiToEvdevMap.end()) {
+                    continue;
+                }
+                for (int evdevButton : mapping->second) {
+                    if (assignedButtons >= MAX_BUTTONS) {
+                        break;
                     }
+                    pressedButtons[assignedButtons++] = NamespacedButtonState(
+                        ButtonNamespace::VMOUSE, evdevButton, button.state
+                    );
+                    lastPressedButtons.erase(
+                        std::remove(
+                            lastPressedButtons.begin(),
+                            lastPressedButtons.end(),
+                            evdevButton
+                        ),
+                        lastPressedButtons.end()
+                    );
                 }
             }
         }
@@ -409,7 +456,7 @@ public:
         return irSpotClustering.rightPoint.undivide();
     }
 
-    std::map<WiimoteButton, std::string> getButtonMap() const {
+    std::map<WiimoteButtonMappingState, std::string> getButtonMap() const {
         return buttonMapper.getStringMappings();
     }
 
@@ -417,11 +464,11 @@ public:
         buttonMapper.clearMapping();
     }
 
-    void mapButton(WiimoteButton button, const SupportedButton* evdevButton) {
+    void mapButton(WiimoteButton button, bool ir, const SupportedButton* evdevButton) {
         if (!evdevButton) {
-            buttonMapper.clearButtonAssignments(button);
+            buttonMapper.clearButtonAssignments(button, ir);
         } else {
-            buttonMapper.addMapping(button, evdevButton->code);
+            buttonMapper.addMapping(button, ir, evdevButton->code);
         }
     }
 
@@ -528,8 +575,8 @@ public:
             0, 0, 10000, 10000
         );
 
-        buttonMapper.addMapping(WiimoteButton::A, BTN_LEFT);
-        buttonMapper.addMapping(WiimoteButton::B, BTN_RIGHT);
+        buttonMapper.addMapping(WiimoteButton::A, true, BTN_LEFT);
+        buttonMapper.addMapping(WiimoteButton::B, true, BTN_RIGHT);
 
         processorSequence.push_back(&processingStart);
         processorSequence.push_back(&buttonMapper);
@@ -633,7 +680,7 @@ int main(int argc, char* argv[]) {
         auto keyMappings = wmouse.getButtonMap();
         for (auto& mapping : keyMappings) {
             config.provideDefault(
-                "button_" + asciiLower(WIIMOTE_BUTTON_READABLE_NAMES[mapping.first]),
+                mapping.first.toConfigurationKey(),
                 mapping.second
             );
         }
@@ -649,23 +696,31 @@ int main(int argc, char* argv[]) {
         config.vectorOptions["screen_bottom_right"].values[1]
     );
     wmouse.clearButtonMap();
+    static const std::vector<std::string> ONOFFSCREEN_SUFFIXES = {
+        "",
+        "_offscreen"
+    };
     for (auto btnName : WIIMOTE_BUTTON_READABLE_NAMES) {
-        std::string wiiConfName = asciiLower("button_" + btnName.second);
-        auto foundConf = config.stringOptions.find(wiiConfName);
-        if (foundConf == config.stringOptions.end()) {
-            continue;
-        }
+        for (auto suffix : ONOFFSCREEN_SUFFIXES) {
+            std::string wiiConfName = asciiLower("button_" + btnName.second + suffix);
+            auto foundConf = config.stringOptions.find(wiiConfName);
+            if (foundConf == config.stringOptions.end()) {
+                continue;
+            }
 
-        const std::string& keyName = foundConf->second;
-        const SupportedButton* btn = findButtonByName(keyName);
-        if ((!btn) && (keyName != "")) {
-            std::cerr 
-                << "Ignoring invalid mapped button: " 
-                << keyName << std::endl;
-            continue;
-        }
+            const bool ir = suffix != ONOFFSCREEN_SUFFIXES[0];
 
-        wmouse.mapButton(btnName.first, btn);
+            const std::string& keyName = foundConf->second;
+            const SupportedButton* btn = findButtonByName(keyName);
+            if ((!btn) && (keyName != "")) {
+                std::cerr 
+                    << "Ignoring invalid mapped button: " 
+                    << keyName << std::endl;
+                continue;
+            }
+
+            wmouse.mapButton(btnName.first, ir, btn);
+        }
     }
 
     std::cout << "Mouse driver started!" << std::endl;
@@ -806,7 +861,7 @@ int main(int argc, char* argv[]) {
                     std::stringstream ss;
                     ss << "OK:";
                     for (auto& mapping : keymap) {
-                        ss << WIIMOTE_BUTTON_NAMES[mapping.first] 
+                        ss << mapping.first.toProtocolString()
                             << ":" << mapping.second << ":";
                     }
                     eventResultBuffer = ss.str();
@@ -814,7 +869,7 @@ int main(int argc, char* argv[]) {
                     return eventResultBuffer.c_str();
                 }
                 if (command == "bindkey") {
-                    if (parameters.size() != 2) {
+                    if (parameters.size() != 3) {
                         return "ERROR:Invalid parameter count";
                     }
 
@@ -825,13 +880,22 @@ int main(int argc, char* argv[]) {
                         return "ERROR:Invalid wii button";
                     }
 
-                    std::string keyName = trim(parameters[1]);
+                    bool ir;
+                    if (parameters[1] == "0") {
+                        ir = false;
+                    } else if (parameters[1] == "1") {
+                        ir = true;
+                    } else {
+                        return "ERROR:Invalid ir value";
+                    }
+
+                    std::string keyName = trim(parameters[2]);
                     const SupportedButton* key = findButtonByName(keyName);
                     if ((!key) && (keyName != "")) {
                         return "ERROR:Invalid key binding";
                     }
 
-                    wmouse.mapButton(wiiButton, key);
+                    wmouse.mapButton(wiiButton, ir, key);
 
                     const std::string wiiConfName = 
                         "button_" + asciiLower(WIIMOTE_BUTTON_READABLE_NAMES[wiiButton]);

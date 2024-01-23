@@ -35,6 +35,17 @@ const char* VALID_OPTIONS[] = {
     "button_down",
     "button_left",
     "button_right",
+    "button_a_offscreen",
+    "button_b_offscreen",
+    "button_plus_offscreen",
+    "button_minus_offscreen",
+    "button_home_offscreen",
+    "button_one_offscreen",
+    "button_two_offscreen",
+    "button_up_offscreen",
+    "button_down_offscreen",
+    "button_left_offscreen",
+    "button_right_offscreen",
     nullptr
 };
 
