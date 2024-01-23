@@ -619,8 +619,8 @@ void applyDeviceConfigurations(WiiMouse& wmouse, Config& config) {
     if (!AppliedDefaults) {
         Vector3 defX, defY;
         wmouse.getCalibrationVectors(defX, defY);
-        config.provideDefault("calmatX", vector3ToString(defX));
-        config.provideDefault("calmatY", vector3ToString(defY));
+        config.provideDefault("calmatx", vector3ToString(defX));
+        config.provideDefault("calmaty", vector3ToString(defY));
         config.provideDefault(
             "screen_top_left",
             vector3ToString(Vector3(0, 0, 0))
@@ -640,8 +640,8 @@ void applyDeviceConfigurations(WiiMouse& wmouse, Config& config) {
     }
 
     wmouse.setCalibrationVectors(
-        config.vectorOptions["calmatX"],
-        config.vectorOptions["calmatY"]
+        config.vectorOptions["calmatx"],
+        config.vectorOptions["calmaty"]
     );
     wmouse.setScreenArea(
         config.vectorOptions["screen_top_left"].values[0],
@@ -735,12 +735,10 @@ int main(int argc, char* argv[]) {
                     monitor.poll();
                 }
             }
-            if (monitor.count() > 0) {
-                wiimote = monitor.get_device(0);
+            if (interuptMainLoop) {
+                break;
             }
-        }
-        if (interuptMainLoop) {
-            break;
+            wiimote = monitor.get_device(0);
         }
 
         WiiMouse wmouse(wiimote);
@@ -801,8 +799,8 @@ int main(int argc, char* argv[]) {
                                 return "ERROR:Invalid parameter";
                             }
                             wmouse.setCalibrationVectors(x, y);
-                            config.vectorOptions["calmatX"] = x;
-                            config.vectorOptions["calmatY"] = y;
+                            config.vectorOptions["calmatx"] = x;
+                            config.vectorOptions["calmaty"] = y;
                             config.writeConfigFile();
                             return "OK";
                         }

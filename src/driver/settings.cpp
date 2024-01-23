@@ -20,8 +20,8 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 
 const char* VALID_OPTIONS[] = {
     "socket_address",
-    "calmatX",
-    "calmatY",
+    "calmatx",
+    "calmaty",
     "screen_top_left",
     "screen_bottom_right",
     "button_a",
@@ -50,8 +50,8 @@ const char* VALID_OPTIONS[] = {
 };
 
 const char* VECTOR_OPTIONS[] = {
-    "calmatX",
-    "calmatY",
+    "calmatx",
+    "calmaty",
     "screen_top_left",
     "screen_bottom_right",
     nullptr
