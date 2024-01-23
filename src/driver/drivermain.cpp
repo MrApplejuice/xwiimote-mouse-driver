@@ -110,7 +110,7 @@ struct WiimoteButtonMappingState {
     std::string toConfigurationKey() const {
         std::string result = "button_";
         result += asciiLower(WIIMOTE_BUTTON_READABLE_NAMES[button]);
-        if (irVisible) {
+        if (!irVisible) {
             result += "_offscreen";
         }
         return result;
@@ -708,7 +708,7 @@ int main(int argc, char* argv[]) {
                 continue;
             }
 
-            const bool ir = suffix != ONOFFSCREEN_SUFFIXES[0];
+            const bool ir = suffix == ONOFFSCREEN_SUFFIXES[0];
 
             const std::string& keyName = foundConf->second;
             const SupportedButton* btn = findButtonByName(keyName);
