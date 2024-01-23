@@ -26,6 +26,7 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 #include <memory>
 #include <exception>
 #include <filesystem>
+#include <chrono>
 
 #include <csignal>
 
@@ -101,6 +102,7 @@ public:
 private:
     XwiiRefcountRef<xwii_iface*> dev;
     std::string devPath;
+    std::chrono::time_point<std::chrono::steady_clock> lastAccelPollTime;
 
     void processAccel(xwii_event& ev) {
         accelX = ev.v.abs->x;
@@ -130,6 +132,8 @@ public:
         irdata[1].x = irdata[1].y = irdata[1].z = 1023;
         irdata[2].x = irdata[2].y = irdata[2].z = 1023;
         irdata[3].x = irdata[3].y = irdata[3].z = 1023;
+
+        lastAccelPollTime = std::chrono::steady_clock::now();
     }
 
     void poll() {
@@ -140,6 +144,7 @@ public:
 
         int err;
         xwii_event ev;
+        bool receivedAccelEvent = false;
         while (true) {
             err = xwii_iface_dispatch(dev.ref, &ev, sizeof(ev));
             if (err != 0) {
@@ -147,6 +152,7 @@ public:
             }
             if (ev.type == XWII_EVENT_ACCEL) {
                 processAccel(ev);
+                receivedAccelEvent = true;
             } else if (ev.type == XWII_EVENT_IR) {
                 std::copy(ev.v.abs, ev.v.abs + 4, irdata);
             } else if (ev.type == XWII_EVENT_KEY) {
@@ -158,6 +164,17 @@ public:
         }
         if (err != -EAGAIN) {
             throw DevFailed();
+        }
+
+        // We expect a accel event every half second at least... otherwise
+        // the device is probably disconnected.
+        auto now = std::chrono::steady_clock::now();
+        if (!receivedAccelEvent) {
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastAccelPollTime).count() > 500) {
+                throw DevDisappeared();
+            }
+        } else {
+            lastAccelPollTime = now;
         }
     }
 };
