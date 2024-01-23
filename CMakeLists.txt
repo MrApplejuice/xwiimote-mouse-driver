@@ -53,6 +53,7 @@ add_executable(
         src/driver/virtualmouse.hpp
         src/driver/virtualmouse.cpp
         src/driver/intlinalg.hpp
+        src/driver/floatlinalg.hpp
         src/driver/controlsocket.hpp
         src/driver/controlsocket.cpp
         src/driver/device.hpp

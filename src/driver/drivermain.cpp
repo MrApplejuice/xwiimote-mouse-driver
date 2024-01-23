@@ -31,6 +31,7 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 
 #include "base.hpp"
 #include "intlinalg.hpp"
+#include "floatlinalg.hpp"
 #include "virtualmouse.hpp"
 #include "controlsocket.hpp"
 #include "device.hpp"
@@ -63,8 +64,8 @@ public:
     NamespacedButtonState pressedButtons[MAX_BUTTONS];
 
     int nValidIrSpots;
-    Vector3 trackingDots[4];
-    Vector3 accelVector;
+    Vector3f trackingDots[4];
+    Vector3f accelVector;
 
     bool isButtonPressed(ButtonNamespace ns, int buttonId) const {
         const auto searchFor = NamespacedButtonState(ns, buttonId, false);
@@ -235,10 +236,10 @@ public:
 class WMPSmoother : public WiiMouseProcessingModule {
 private:
     bool hasAccel;
-    Vector3 lastAccel;
+    Vector3f lastAccel;
 
     bool hasPosition;
-    Vector3 lastPositions[4];
+    Vector3f lastPositions[4];
 
     bool buttonWasPressed;
     float clickReleaseTimer;
@@ -302,16 +303,16 @@ public:
         if (hasPosition && enabled) {
             for (int i = 0; i < 4; i++) {
                 trackingDots[i] = lastPositions[i] = (
-                    (trackingDots[i] * Scalar(1.0f - posMix, 1000000)).redivide(100) + 
-                    (lastPositions[i] * Scalar(posMix, 1000000)).redivide(100)
+                    (trackingDots[i] * (1.0f - posMix)) + 
+                    (lastPositions[i] * posMix)
                 );
             }
         }
 
         if (hasAccel && enabled) {
             accelVector = lastAccel = (
-                (accelVector * Scalar(1.0f - accelMix, 1000000)).redivide(100) +
-                (lastAccel * Scalar(accelMix, 1000000)).redivide(100)
+                (accelVector * (1.0f - accelMix)) +
+                (lastAccel * accelMix)
             );
         }
 
@@ -360,8 +361,8 @@ private:
     Vector3 calmatX;
     Vector3 calmatY;
 
-    Vector3 screenAreaTopLeft;
-    Vector3 screenAreaBottomRight;
+    Vector3f screenAreaTopLeft;
+    Vector3f screenAreaBottomRight;
 
     Vector3 wiimoteMouseMatX;
     Vector3 wiimoteMouseMatY;
@@ -376,7 +377,7 @@ private:
     std::vector<WiiMouseProcessingModule*> processorSequence;
 
     void computeMouseMat() {
-        Vector3 screenAreaSize = screenAreaBottomRight - screenAreaTopLeft;
+        Vector3f screenAreaSize = screenAreaBottomRight - screenAreaTopLeft;
 
         wiimoteMouseMatX = calmatX * Scalar(screenAreaSize.values[0] / 10000L, 1000000);
         wiimoteMouseMatY = calmatY * Scalar(screenAreaSize.values[1] / 10000L, 1000000);
@@ -388,15 +389,17 @@ private:
         wiimoteMouseMatY = wiimoteMouseMatY.redivide(100);
     }
 
-    void internalSetScreenArea(const Scalar& left, const Scalar& top, const Scalar& right, const Scalar& bottom) {
-        screenAreaTopLeft = Vector3(
-            clamp(min(left, right), 0, 10000),
-            clamp(min(top, bottom), 0, 10000),
+    void internalSetScreenArea(
+        const Scalar& left, const Scalar& top, const Scalar& right, const Scalar& bottom
+    ) {
+        screenAreaTopLeft = Vector3f(
+            clamp(min(left, right).toFloat(), 0, 10000),
+            clamp(min(top, bottom).toFloat(), 0, 10000),
             0L
         );
-        screenAreaBottomRight = Vector3(
-            clamp(max(left, right), 0, 10000),
-            clamp(max(top, bottom), 0, 10000),
+        screenAreaBottomRight = Vector3f(
+            clamp(max(left, right).toFloat(), 0, 10000),
+            clamp(max(top, bottom).toFloat(), 0, 10000),
             0L
         );
         computeMouseMat();
@@ -419,7 +422,7 @@ public:
         std::cout << "Screen area set to " << screenAreaTopLeft << " and " << screenAreaBottomRight << std::endl;
     }
 
-    void getScreenArea(Vector3& topLeft, Vector3& bottomRight) const {
+    void getScreenArea(Vector3f& topLeft, Vector3f& bottomRight) const {
         topLeft = screenAreaTopLeft;
         bottomRight = screenAreaBottomRight;
     }
@@ -532,24 +535,24 @@ public:
         }
         if (mouseEnabled) {
             if (processingEnd.nValidIrSpots > 0) {
-                Vector3 mid = Vector3();
+                Vector3f mid;
                 for (int i = 0; i < processingEnd.nValidIrSpots; i++) {
                     mid = mid + processingEnd.trackingDots[i];
                 }
-                mid = mid.undivide() / processingEnd.nValidIrSpots;
-                mid.values[2] = 1;
+                mid = mid / processingEnd.nValidIrSpots;
+                mid.values[2] = 1.0f;
 
                 const Vector3 mouseCoord = Vector3(
                     clamp(
                         mid.dot(wiimoteMouseMatX),
                         screenAreaTopLeft.values[0],
                         screenAreaBottomRight.values[0]
-                    ).undivide(),
+                    ),
                     clamp(
                         mid.dot(wiimoteMouseMatY),
                         screenAreaTopLeft.values[1],
                         screenAreaBottomRight.values[1]
-                    ).undivide(),
+                    ),
                     0L
                 );
 
@@ -780,10 +783,11 @@ int main(int argc, char* argv[]) {
                     }
                 }
                 if (command == "getscreenarea100") {
-                    Vector3 topLeft, bottomRight;
-                    wmouse.getScreenArea(topLeft, bottomRight);
-                    topLeft = topLeft.redivide(100);
-                    bottomRight = bottomRight.redivide(100);
+                    Vector3f topLeftF, bottomRightF;
+                    wmouse.getScreenArea(topLeftF, bottomRightF);
+
+                    Vector3 topLeft = topLeftF.toVector3(100);
+                    Vector3 bottomRight = bottomRightF.toVector3(100);
 
                     std::stringstream ss;
                     ss << "OK" 
@@ -811,10 +815,12 @@ int main(int argc, char* argv[]) {
                         } 
                         wmouse.setScreenArea(left, top, right, bottom);
 
-                        Vector3 topLeft, bottomRight;
-                        wmouse.getScreenArea(topLeft, bottomRight);
-                        config.vectorOptions["screen_top_left"] = topLeft;
-                        config.vectorOptions["screen_bottom_right"] = bottomRight;
+                        Vector3f topLeftF, bottomRightF;
+                        wmouse.getScreenArea(topLeftF, bottomRightF);
+                        config.vectorOptions["screen_top_left"] 
+                            = topLeftF.toVector3(1000);
+                        config.vectorOptions["screen_bottom_right"] 
+                            = bottomRightF.toVector3(1000);
                         config.writeConfigFile();
                         return "OK";
                     } else {

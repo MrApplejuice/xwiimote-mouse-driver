@@ -389,15 +389,15 @@ static constexpr int64_t clamp(int64_t v, int64_t min, int64_t max) {
     return (v < min) ? min : ((v > max) ? max : v);
 }
 
-static Scalar clamp(Scalar v, Scalar min, Scalar max) {
+static Scalar clamp_scalar(Scalar v, Scalar min, Scalar max) {
     return (v < min) ? min : ((v > max) ? max : v);
 }
 
 static Vector3 clamp(Vector3 v, Scalar min, Scalar max) {
     return Vector3(
-        clamp(v.values[0], min, max),
-        clamp(v.values[1], min, max),
-        clamp(v.values[2], min, max)
+        clamp_scalar(v.values[0], min, max),
+        clamp_scalar(v.values[1], min, max),
+        clamp_scalar(v.values[2], min, max)
     );
 }
 
