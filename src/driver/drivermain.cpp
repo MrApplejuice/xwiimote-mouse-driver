@@ -897,9 +897,8 @@ int main(int argc, char* argv[]) {
 
                     wmouse.mapButton(wiiButton, ir, key);
 
-                    const std::string wiiConfName = 
-                        "button_" + asciiLower(WIIMOTE_BUTTON_READABLE_NAMES[wiiButton]);
-                    config.stringOptions[wiiConfName] = keyName;
+                    const WiimoteButtonMappingState state = {wiiButton, ir};
+                    config.stringOptions[state.toConfigurationKey()] = keyName;
                     config.writeConfigFile();
                     return "OK";
                 }
