@@ -136,6 +136,10 @@ public:
         lastAccelPollTime = std::chrono::steady_clock::now();
     }
 
+    ~Xwiimote() {
+        xwii_iface_close(dev.ref, XWII_IFACE_CORE | XWII_IFACE_ACCEL | XWII_IFACE_IR);
+    }
+
     void poll() {
         std::filesystem::path devPath = std::filesystem::path(this->devPath);
         if (!std::filesystem::exists(devPath)) {
