@@ -83,13 +83,15 @@ class WiimoteSocketReader:
 
     def process_message(self, message: str):
         message_parts = message.strip().split(":")
-        if message_parts[0] == "lr":
+        if message_parts[0] == "flr":
             if message_parts[1] == "invalid":
                 self.lr_vectors = None
             else:
                 self.lr_vectors = np.array([int(x) for x in message_parts[1:]]).reshape(
                     (2, 2)
                 )
+        elif message_parts[0] in ["lr", "flr"]:
+            pass
         elif message_parts[0] == "ir":
             index = int(message_parts[1])
             valid = bool(int(message_parts[2]))

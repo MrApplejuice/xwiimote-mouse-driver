@@ -62,6 +62,16 @@ struct Vector3f {
         );
     }
 
+    float& operator[](int index) {
+        assert(index >= 0 && index < 3);
+        return values[index];
+    }
+
+    const float& operator[](int index) const {
+        assert(index >= 0 && index < 3);
+        return values[index];
+    }
+
     float dot(const Vector3f& other) const {
         return values[0] * other.values[0] + 
             values[1] * other.values[1] + 

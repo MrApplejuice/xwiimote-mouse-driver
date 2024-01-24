@@ -68,3 +68,18 @@ struct XwiiRefcountRef {
         }
     }
 };
+
+struct Extents {
+    int width;
+    int height;
+
+    Extents() {
+        width = 0;
+        height = 0;
+    }
+    Extents(int width, int height) {
+        this->width = width;
+        this->height = height;
+    }
+    Extents(const Extents& other) = default;
+};

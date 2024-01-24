@@ -338,15 +338,53 @@ public:
         buttonWasPressed = false;
         clickReleaseTimer = 0.0f;
 
-        accelMixFactor = 0.2f;
-        accelMixFactorClicked = 0.2f;
+        accelMixFactor = 0.0f;
+        accelMixFactorClicked = 0.0f;
 
-        positionMixFactor = 0.0f;
+        positionMixFactor = 0.00001f;
         positionMixFactorClicked = 0.1f;
         clickReleaseBlendDelay = 0.25f;
         clickReleaseFreezeDelay = 0.1f;
     }
 };
+
+class WMPUnrotate : public WiiMouseProcessingModule {
+private:
+public:
+    virtual void process(const WiiMouseProcessingModule& prev) override {
+        copyFromPrev(prev);
+
+        // Takes the acceleration vector and unrotates the tracking dots
+        // to compensate for the rotation of the wiimote.
+
+        Vector3f normAccel = accelVector;
+        normAccel[1] = 0;
+        if (normAccel.len() <= 0.01) {
+            return;
+        }
+        normAccel = normAccel / accelVector.len();
+
+        const static Vector3f HALF_RES(
+            WIIMOTE_IR_SENSOR_EXTENTS.width / 2.0f,
+            WIIMOTE_IR_SENSOR_EXTENTS.height / 2.0f,
+            0
+        );
+
+        const Vector3f unrotateX(normAccel[2], normAccel[0], 0);
+        const Vector3f unrotateY(-normAccel[0], normAccel[2], 0);
+
+        for (int i = 0; i < nValidIrSpots; i++) {
+            Vector3f dot = trackingDots[i] - HALF_RES;
+            dot = Vector3f(
+                dot.dot(unrotateX),
+                dot.dot(unrotateY),
+                0
+            );
+            trackingDots[i] = dot + HALF_RES;
+        }
+    }
+};
+
 
 class WiiMouse {
 private:
@@ -370,6 +408,7 @@ private:
     WMPDummy processingStart;
     WMPButtonMapper buttonMapper;
     WMPSmoother smoother;
+    WMPUnrotate unrotate;
     WMPDummy processingEnd;
 
     std::vector<WiiMouseProcessingModule*> processorSequence;
@@ -455,6 +494,23 @@ public:
 
     Vector3 getRightPoint() const {
         return irSpotClustering.rightPoint.undivide();
+    }
+
+    Vector3 getFilteredLeftPoint() const {
+        if (processingEnd.nValidIrSpots == 0) {
+            return Vector3(0, 0, 0);
+        }
+        return processingEnd.trackingDots[0].toVector3(1);
+    }
+
+    Vector3 getFilteredRightPoint() const {
+        if (processingEnd.nValidIrSpots == 0) {
+            return Vector3(0, 0, 0);
+        }
+        if (processingEnd.nValidIrSpots == 1) {
+            return getFilteredLeftPoint();
+        }
+        return processingEnd.trackingDots[1].toVector3(1);
     }
 
     std::map<WiimoteButtonMappingState, std::string> getButtonMap() const {
@@ -581,6 +637,7 @@ public:
 
         processorSequence.push_back(&processingStart);
         processorSequence.push_back(&buttonMapper);
+        processorSequence.push_back(&unrotate);
         processorSequence.push_back(&smoother);
         processorSequence.push_back(&processingEnd);
     }
@@ -950,18 +1007,34 @@ int main(int argc, char* argv[]) {
 
             // Send clustered left/right data
             if (wmouse.hasValidLeftRight()) {
+                const Vector3 left = wmouse.getLeftPoint();
+                const Vector3 right = wmouse.getRightPoint();
                 snprintf(
                     irMessageBuffer,
                     1024,
                     "lr:%i:%i:%i:%i\n",
-                    (int) wmouse.getLeftPoint().values[0].value,
-                    (int) wmouse.getLeftPoint().values[1].value,
-                    (int) wmouse.getRightPoint().values[0].value,
-                    (int) wmouse.getRightPoint().values[1].value
+                    (int) left.values[0].value,
+                    (int) left.values[1].value,
+                    (int) right.values[0].value,
+                    (int) right.values[1].value
+                );
+                csocket.broadcastMessage(irMessageBuffer);
+
+                const Vector3 fleft = wmouse.getFilteredLeftPoint();
+                const Vector3 fright = wmouse.getFilteredRightPoint();
+                snprintf(
+                    irMessageBuffer,
+                    1024,
+                    "flr:%i:%i:%i:%i\n",
+                    (int) fleft.values[0].value,
+                    (int) fleft.values[1].value,
+                    (int) fright.values[0].value,
+                    (int) fright.values[1].value
                 );
                 csocket.broadcastMessage(irMessageBuffer);
             } else {
                 csocket.broadcastMessage("lr:invalid\n");
+                csocket.broadcastMessage("flr:invalid\n");
             }
 
             if (buttonStates != wmouse.getButtonStates()) {

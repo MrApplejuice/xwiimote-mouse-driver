@@ -36,6 +36,10 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 
 std::ostream& operator<<(std::ostream& out, const xwii_event_abs& abs);
 
+const static Extents WIIMOTE_IR_SENSOR_EXTENTS = {
+    1024, 768
+};
+
 class DevFailed : public std::exception {};
 class DevInitFailed : public DevFailed {};
 class DevDisappeared : public DevFailed {};

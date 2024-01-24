@@ -9,3 +9,11 @@
 Nope: libinput is a no-go! It is only a translation layer for HID->userspace...
 one would need to hack the library itself!
 2. Use `libinput` to inject the cursor events as mouse events
+
+# Notes 2024-01-24
+
+Acceleration vector of the wiimote:
+
+X-axis=right positive
+Y-axis=front positive
+Z-axis=botton positive
