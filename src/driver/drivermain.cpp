@@ -261,13 +261,12 @@ public:
             hasPosition = false;
         }
 
-        float posMix, accelMix;
-
-        const bool buttonIsPressed = isButtonPressed(ButtonNamespace::VMOUSE, 0) 
-            || isButtonPressed(ButtonNamespace::VMOUSE, 1) 
-            || isButtonPressed(ButtonNamespace::VMOUSE, 2);
-        
+        const bool buttonIsPressed = isButtonPressed(ButtonNamespace::VMOUSE, BTN_LEFT) 
+            || isButtonPressed(ButtonNamespace::VMOUSE, BTN_RIGHT) 
+            || isButtonPressed(ButtonNamespace::VMOUSE, BTN_MIDDLE);
         clickReleaseTimer = maxf(clickReleaseTimer - deltaT / 1000.0f, 0.0f);
+        
+        float posMix, accelMix;
         if (buttonIsPressed) {
             accelMix = pow(accelMixFactorClicked, deltaT / 1000.0f);
             if (!buttonWasPressed) {
@@ -279,7 +278,6 @@ public:
             clickReleaseTimer = minf(clickReleaseTimer, clickReleaseBlendDelay);
         }
         buttonWasPressed = buttonIsPressed;
-
 
         if (clickReleaseTimer <= 0) {
             posMix = positionMixFactor;
@@ -343,10 +341,10 @@ public:
         accelMixFactor = 0.2f;
         accelMixFactorClicked = 0.2f;
 
-        positionMixFactor = 1e-20f;
+        positionMixFactor = 0.0f;
         positionMixFactorClicked = 0.1f;
-        clickReleaseBlendDelay = 1.0f;
-        clickReleaseFreezeDelay = 0.25f;
+        clickReleaseBlendDelay = 0.25f;
+        clickReleaseFreezeDelay = 0.1f;
     }
 };
 
