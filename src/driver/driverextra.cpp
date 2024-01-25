@@ -109,13 +109,8 @@ void IrSpotClustering :: processIrSpots(const IRData* irSpots) {
                     }
                 }
 
-                if (clusterPoints[0].values[0].value < clusterPoints[1].values[0].value) {
-                    leftPoint = clusterPoints[0].undivide();
-                    rightPoint = clusterPoints[1].undivide();
-                } else {
-                    leftPoint = clusterPoints[1].undivide();
-                    rightPoint = clusterPoints[0].undivide();
-                }
+                leftPoint = clusterPoints[0].undivide();
+                rightPoint = clusterPoints[1].undivide();
             }
             break;
         default:
