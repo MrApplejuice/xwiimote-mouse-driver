@@ -417,6 +417,14 @@ static float minf(float a, float b) {
     return (a < b) ? a : b;
 }
 
+static float maxf(float a, float b, float c) {
+    return maxf(maxf(a, b), c);
+}
+
+static float minf(float a, float b, float c) {
+    return minf(minf(a, b), c);
+}
+
 static std::ostream& operator<<(std::ostream& out, const Scalar& s) {
     out << s.value << "/" << s.divisor;
     return out;

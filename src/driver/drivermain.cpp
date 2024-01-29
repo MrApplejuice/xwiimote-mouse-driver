@@ -39,11 +39,16 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 #include "driveroptparse.hpp"
 #include "driverextra.hpp"
 
+enum class ProcessingOutputHistoryPoint {
+    Cluster = 0,
+};
+
 class WiiMouseProcessingModule {
 public:
     static const int MAX_BUTTONS = 32;
 protected:
     void copyFromPrev(const WiiMouseProcessingModule& prev) {
+        history = prev.history;
         deltaT = prev.deltaT;
         std::copy(
             prev.pressedButtons, 
@@ -60,6 +65,8 @@ protected:
     }
 public:
     int deltaT; // milli seconds
+
+    std::map<ProcessingOutputHistoryPoint, WiiMouseProcessingModule*> history;
 
     NamespacedButtonState pressedButtons[MAX_BUTTONS];
 
@@ -82,6 +89,7 @@ public:
 
     virtual void process(const WiiMouseProcessingModule& prev) = 0;
 };
+
 
 class WMPDummy : public WiiMouseProcessingModule {
 public:
@@ -118,6 +126,7 @@ struct WiimoteButtonMappingState {
     }
 };
 
+
 static bool operator<(
     const WiimoteButtonMappingState& a,
     const WiimoteButtonMappingState& b
@@ -130,6 +139,7 @@ static bool operator<(
     }
     return a.irVisible < b.irVisible;
 }
+
 
 class WMPButtonMapper : public WiiMouseProcessingModule {
 private:
@@ -232,6 +242,7 @@ public:
         }
     }
 };
+
 
 class WMPSmoother : public WiiMouseProcessingModule {
 private:
@@ -348,6 +359,7 @@ public:
     }
 };
 
+
 class WMPUnrotate : public WiiMouseProcessingModule {
 private:
     void doUnrotate(const Vector3f& unrotateX, const Vector3f& unrotateY) {
@@ -415,8 +427,108 @@ public:
         copyFromPrev(prev);
 
         unrotateUsingAccel();
+        assignLeftRight();
         unrotateUsingDualPoint();
         assignLeftRight();
+    }
+};
+
+
+class WMPPredictiveDualIrTracking : public WiiMouseProcessingModule {
+private:
+    float lockedDistance;
+
+    Vector3f XY_MEASURE_STD_NOISE;
+
+    Vector3f left, right, center;
+    float logLikelihoodLeft, logLikelihoodRight, logLikelihoodCenter;
+
+    float logNormal2d(const Vector3f& point, const Vector3f& pointStd) {
+        const float sqrt2pi = 2.5066282746310002f;
+
+        const float x = point[0] / pointStd[0];
+        const float y = point[1] / pointStd[1];
+
+        return (-0.5f * (x * x + y * y)) - (sqrt2pi + pointStd[0] + pointStd[1]);
+    }
+public:
+    virtual void process(const WiiMouseProcessingModule& prev) override {
+        copyFromPrev(prev);
+
+        WiiMouseProcessingModule& irData = *history[ProcessingOutputHistoryPoint::Cluster];
+        int clusterNValidIrSpots = irData.nValidIrSpots;
+        if (clusterNValidIrSpots == 2) {
+            if (irData.trackingDots[0] == irData.trackingDots[1]) {
+                clusterNValidIrSpots = 1;
+            }
+        }
+
+        if (clusterNValidIrSpots == 2) {
+            left = trackingDots[0];
+            right = trackingDots[1];
+            center = (trackingDots[0] + trackingDots[1]) / 2.0f;
+            logLikelihoodLeft = logLikelihoodRight = logLikelihoodCenter = 0.0f;
+            lockedDistance = (left - right).len();
+        } else if (clusterNValidIrSpots == 1) {
+            if (lockedDistance < 0) {
+                return;
+            } 
+
+            Vector3f newPoint = (trackingDots[0] + trackingDots[1]) / 2.0f;
+
+            logLikelihoodLeft += logNormal2d(newPoint - left, XY_MEASURE_STD_NOISE);
+            logLikelihoodRight += logNormal2d(newPoint - right, XY_MEASURE_STD_NOISE);
+            logLikelihoodCenter += logNormal2d(newPoint - center, XY_MEASURE_STD_NOISE);
+
+            {
+                const float likelihoodMax = maxf(
+                    logLikelihoodLeft, 
+                    logLikelihoodRight,
+                    logLikelihoodCenter
+                );
+                logLikelihoodLeft = maxf(logLikelihoodLeft - likelihoodMax, -100000.0f);
+                logLikelihoodRight = maxf(logLikelihoodRight - likelihoodMax, -100000.0f);
+                logLikelihoodCenter = maxf(logLikelihoodCenter - likelihoodMax, -100000.0f);
+            }
+
+            const float normalization = exp(logLikelihoodLeft) 
+                + exp(logLikelihoodRight) 
+                + exp(logLikelihoodCenter);
+            Vector3f predPoint = (
+                left * exp(logLikelihoodLeft)
+                + right * exp(logLikelihoodRight)
+                + center * exp(logLikelihoodCenter)
+            ) / normalization;
+            
+            const Vector3f offset = newPoint - predPoint;
+            left = left + offset;
+            right = right + offset;
+            center = center + offset;
+            predPoint = predPoint + offset;
+
+            nValidIrSpots = 2;
+            if (logLikelihoodLeft >= 0.0f) {
+                trackingDots[0] = predPoint;
+                trackingDots[1] = predPoint + Vector3f(lockedDistance, 0, 0);
+            } else if (logLikelihoodRight >= 0.0f) {
+                trackingDots[0] = predPoint - Vector3f(lockedDistance, 0, 0);
+                trackingDots[1] = predPoint;
+            } else {
+                trackingDots[0] = predPoint - Vector3f(lockedDistance / 2.0f, 0, 0);
+                trackingDots[1] = predPoint + Vector3f(lockedDistance / 2.0f, 0, 0);
+            }
+
+            left = trackingDots[0];
+            right = trackingDots[1];
+            center = (trackingDots[0] + trackingDots[1]) / 2.0f;
+        } else {
+            lockedDistance = -1;
+        }
+    }
+
+    WMPPredictiveDualIrTracking() {
+        XY_MEASURE_STD_NOISE = Vector3f(15.0f, 15.0f, 0);
+        lockedDistance = -1;
     }
 };
 
@@ -444,6 +556,7 @@ private:
     WMPButtonMapper buttonMapper;
     WMPSmoother smoother;
     WMPUnrotate unrotate;
+    WMPPredictiveDualIrTracking predictiveDualIrTracking;
     WMPDummy processingEnd;
 
     std::vector<WiiMouseProcessingModule*> processorSequence;
@@ -612,6 +725,7 @@ public:
                 );
             }
         }
+        processingStart.history[ProcessingOutputHistoryPoint::Cluster] = &processingStart;
         runProcessing();
 
         for (auto button : processingEnd.pressedButtons) {
@@ -673,6 +787,7 @@ public:
         processorSequence.push_back(&processingStart);
         processorSequence.push_back(&buttonMapper);
         processorSequence.push_back(&unrotate);
+        processorSequence.push_back(&predictiveDualIrTracking);
         processorSequence.push_back(&smoother);
         processorSequence.push_back(&processingEnd);
     }
