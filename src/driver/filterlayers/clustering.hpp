@@ -35,7 +35,7 @@ public:
     Vector3 leftPoint;
     Vector3 rightPoint;
 
-    Scalar defaultDistance;
+    float defaultDistance;
 
     void processIrSpots(const IRData* irSpots);
     IrSpotClustering();
@@ -49,6 +49,7 @@ public:
 
     WMPClustering() {
         std::fill(irData, irData + 4, INVALID_IR);
+        irSpotClustering.defaultDistance = 100.0;
     }
 
     void process(const WiiMouseProcessingModule& prev) {
@@ -70,6 +71,11 @@ public:
         if (irSpotClustering.valid) {
             trackingDots[0] = irSpotClustering.leftPoint;
             trackingDots[1] = irSpotClustering.rightPoint;
+
+            if ((trackingDots[0] - trackingDots[1]).len() < 0.5f * irSpotClustering.defaultDistance) {
+                nValidIrSpots = 1;
+                trackingDots[0] = (trackingDots[0] + trackingDots[1]) / 2.0f;
+            }
         }
     }
 };

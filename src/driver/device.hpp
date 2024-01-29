@@ -117,8 +117,11 @@ public:
     WiimoteButtonStates buttonStates;
     int accelX, accelY, accelZ;
     xwii_event_abs irdata[4];
+    const unsigned int REQUIRED_INTERFACES;
 
-    Xwiimote(std::string _devName) {
+    Xwiimote(std::string _devName) : 
+        REQUIRED_INTERFACES(XWII_IFACE_CORE | XWII_IFACE_ACCEL | XWII_IFACE_IR) 
+    {
         devPath = _devName;
         xwii_iface* rawdev;
         if (xwii_iface_new(&rawdev, devPath.c_str()) < 0) {
@@ -129,7 +132,7 @@ public:
             &xwii_iface_ref,
             &xwii_iface_unref
         );
-        xwii_iface_open(rawdev, XWII_IFACE_CORE | XWII_IFACE_ACCEL | XWII_IFACE_IR);
+        xwii_iface_open(rawdev, REQUIRED_INTERFACES);
         accelX = accelY = accelZ = 0;
         
         irdata[0].x = irdata[0].y = irdata[0].z = 1023;
@@ -141,12 +144,15 @@ public:
     }
 
     ~Xwiimote() {
-        xwii_iface_close(dev.ref, XWII_IFACE_CORE | XWII_IFACE_ACCEL | XWII_IFACE_IR);
+        xwii_iface_close(dev.ref, REQUIRED_INTERFACES);
     }
 
     void poll() {
         std::filesystem::path devPath = std::filesystem::path(this->devPath);
         if (!std::filesystem::exists(devPath)) {
+            throw DevDisappeared();
+        }
+        if (xwii_iface_opened(dev.ref) != REQUIRED_INTERFACES) {
             throw DevDisappeared();
         }
 
