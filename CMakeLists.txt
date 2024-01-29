@@ -68,6 +68,11 @@ add_executable(
         src/driver/driveroptparse.hpp
         src/driver/driverextra.hpp
         src/driver/driverextra.cpp
+        src/driver/filterlayers/base.hpp
+        src/driver/filterlayers/buttons.hpp
+        src/driver/filterlayers/smoother.hpp
+        src/driver/filterlayers/unrotate.hpp
+        src/driver/filterlayers/predictive.hpp
 )
 set_target_properties(xwiimote-mouse-driver PROPERTIES CXX_STANDARD 17)
 
