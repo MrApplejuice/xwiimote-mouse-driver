@@ -46,6 +46,7 @@ const char* VALID_OPTIONS[] = {
     "button_down_offscreen",
     "button_left_offscreen",
     "button_right_offscreen",
+    "default_ir_distance",
     nullptr
 };
 

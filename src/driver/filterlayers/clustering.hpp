@@ -44,12 +44,14 @@ public:
 class WMPClustering : public WiiMouseProcessingModule {
 private:
 public:
+    bool enablePointCollapse;
     IRData irData[4];
     IrSpotClustering irSpotClustering;
 
     WMPClustering() {
         std::fill(irData, irData + 4, INVALID_IR);
         irSpotClustering.defaultDistance = 100.0;
+        enablePointCollapse = true;
     }
 
     void process(const WiiMouseProcessingModule& prev) {
@@ -72,9 +74,12 @@ public:
             trackingDots[0] = irSpotClustering.leftPoint;
             trackingDots[1] = irSpotClustering.rightPoint;
 
-            if ((trackingDots[0] - trackingDots[1]).len() < 0.5f * irSpotClustering.defaultDistance) {
-                nValidIrSpots = 1;
-                trackingDots[0] = (trackingDots[0] + trackingDots[1]) / 2.0f;
+            if (enablePointCollapse) {
+                const float threshold = 0.5f * irSpotClustering.defaultDistance;
+                if ((trackingDots[0] - trackingDots[1]).len() < threshold) {
+                    nValidIrSpots = 1;
+                    trackingDots[0] = (trackingDots[0] + trackingDots[1]) / 2.0f;
+                }
             }
         }
     }

@@ -601,6 +601,9 @@ class IdleLogic(Logic):
     on_start_calibration = None
     on_toggle_mouse = None
 
+    def start(self):
+        self.wiimote.send_message("calibration", "off")
+
     def on_wii_button_pressed(self, button_name: str):
         if button_name == "1":
             if self.on_start_calibration:
@@ -623,12 +626,16 @@ class IdleLogic(Logic):
 
 
 class ClosingLogic(Logic):
+    start_time = None
+
     def start(self):
+        self.start_time = time.time()
         self.wiimote.send_message("mouse", "on")
+        self.wiimote.send_message("calibration", "off")
 
     def process_socket_data(self):
         print("Waiting for mouse to be turned on again...")
-        if not self.wiimote.open_commands:
+        if (not self.wiimote.open_commands) or (time.time() - self.start_time > 20):
             self.win.root.destroy()
 
 
@@ -637,7 +644,7 @@ class CalibrationLogic(Logic):
     on_exit = None
 
     STEPS = [
-        "Point the wiimote to the center of the screen, then press A; press 1 to cancel",
+        "Point the wiimote directly at the sensorbar, then press A; press 1 to cancel",
         "Point the wiimote to the top-left corner of the screen, then press A; press 1 to cancel",
         "Point the wiimote to the top-right corner of the screen, then press A; press 1 to cancel",
         "Point the wiimote to the bottom-left corner of the screen, then press A; press 1 to cancel",
@@ -657,6 +664,9 @@ class CalibrationLogic(Logic):
         self.win.btn_start_calibration.pack(side=tk.TOP, fill=tk.X, pady=5, padx=0)
 
     def on_wii_button_pressed(self, button_name: str):
+        if self.wiimote.lr_vectors is None:
+            return
+
         if button_name == "a":
             self.step_data.append(self.wiimote.lr_vectors)
         if button_name == "1":
@@ -849,6 +859,10 @@ def main():
     window.keybindings.on_new_mapping_selected = bind_new_key
 
     def send_calibration_data(calibration_logic):
+        lr = np.array(calibration_logic.step_data[0])
+        distance = np.linalg.norm(lr[0] - lr[1])
+        wiimote.send_message("irdist100", int(distance * 100))
+
         data = calibration_logic.step_data[1:5]
 
         wii_corners = [np.mean(d, axis=0) for d in data]
@@ -870,6 +884,7 @@ def main():
 
     def on_start_calibration():
         wiimote.send_message("mouse", "off")
+        wiimote.send_message("calibration", "on")
         window.btn_enable_mouse.config(relief=tk.RAISED)
 
         calibration_logic = CalibrationLogic(window, wiimote)

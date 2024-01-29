@@ -137,14 +137,6 @@ public:
         std::cout << "Calibration vectors set to " << calmatX << " and " << calmatY << std::endl;
     }
 
-    Scalar getIrSpotDistance() const {
-        return clustering.irSpotClustering.defaultDistance;
-    }
-
-    void setIrSpotDistance(int distance) {
-        clustering.irSpotClustering.defaultDistance = distance;
-    }
-
     bool hasValidLeftRight() const {
         return clustering.irSpotClustering.valid;
     }
@@ -155,6 +147,19 @@ public:
 
     Vector3 getClusteringRightPoint() const {
         return clustering.irSpotClustering.rightPoint.undivide();
+    }
+
+    float getClusteringDefaultDistance() const {
+        return clustering.irSpotClustering.defaultDistance;
+    }
+
+    void setClusteringDefaultDistance(float distance) {
+        clustering.irSpotClustering.defaultDistance = distance;
+    }
+
+    void setCalibrationMode(bool on) {
+        clustering.enablePointCollapse = !on;
+        smoother.enabled = !on;
     }
 
     Vector3 getFilteredLeftPoint() const {
@@ -353,6 +358,10 @@ void applyDeviceConfigurations(WiiMouse& wmouse, Config& config) {
                 mapping.second
             );
         }
+        config.provideDefault(
+            "default_ir_distance",
+            std::to_string((int64_t) (wmouse.getClusteringDefaultDistance() * 100))
+        );
         AppliedDefaults = true;
     }
 
@@ -366,6 +375,12 @@ void applyDeviceConfigurations(WiiMouse& wmouse, Config& config) {
         config.vectorOptions["screen_bottom_right"].values[0],
         config.vectorOptions["screen_bottom_right"].values[1]
     );
+
+    try {
+        int64_t defaultIrDistance = std::stoll(config.stringOptions["default_ir_distance"]);
+        wmouse.setClusteringDefaultDistance(defaultIrDistance / 100.0f);
+    }
+    catch (std::exception& e) {}
 
     wmouse.clearButtonMap();
     static const std::vector<std::string> ONOFFSCREEN_SUFFIXES = {
@@ -647,6 +662,31 @@ int main(int argc, char* argv[]) {
                         config.stringOptions[state.toConfigurationKey()] = keyName;
                         config.writeConfigFile();
                         return "OK";
+                    }
+                    if (command == "irdist100") {
+                        if (parameters.size() != 1) {
+                            return "ERROR:Invalid parameter count";
+                        }
+                        int64_t distance;
+                        try {
+                            distance = std::stoll(parameters[0]);
+                        }
+                        catch (std::exception& e) {
+                            return "ERROR:Invalid parameter";
+                        }
+                        if (distance < 0) {
+                            return "ERROR:Invalid parameter";
+                        }
+                        wmouse.setClusteringDefaultDistance(distance / 100.0f);
+                        config.stringOptions["default_ir_distance"] = parameters[0];
+                        config.writeConfigFile();
+                        return "OK";
+                    }
+                    if (command == "calibration") {
+                        if (parameters.size() != 1) {
+                            return "ERROR:Invalid parameter count";
+                        }
+                        wmouse.setCalibrationMode(parameters[0] == "on");
                     }
                     return "ERROR:Invalid command";
                 }
