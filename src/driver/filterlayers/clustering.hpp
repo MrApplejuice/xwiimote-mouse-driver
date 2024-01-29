@@ -41,3 +41,35 @@ public:
     IrSpotClustering();
 };
 
+class WMPClustering : public WiiMouseProcessingModule {
+private:
+public:
+    IRData irData[4];
+    IrSpotClustering irSpotClustering;
+
+    WMPClustering() {
+        std::fill(irData, irData + 4, INVALID_IR);
+    }
+
+    void process(const WiiMouseProcessingModule& prev) {
+        copyFromPrev(prev);
+        history[ProcessingOutputHistoryPoint::Cluster] = this;
+
+        for (int i = 0; i < 4; i++) {
+            if (i >= nValidIrSpots) {
+                irData[i] = INVALID_IR;
+            } else {
+                irData[i].valid = true;
+                irData[i].point = trackingDots[i].toVector3(1);
+            }
+        }
+
+        irSpotClustering.processIrSpots(irData);
+
+        nValidIrSpots = irSpotClustering.valid ? 2 : 0;
+        if (irSpotClustering.valid) {
+            trackingDots[0] = irSpotClustering.leftPoint;
+            trackingDots[1] = irSpotClustering.rightPoint;
+        }
+    }
+};

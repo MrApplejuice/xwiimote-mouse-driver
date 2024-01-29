@@ -53,9 +53,6 @@ private:
     Xwiimote::Ptr wiimote;
     VirtualMouse vmouse;
 
-    IRData irSpots[4];
-    IrSpotClustering irSpotClustering;
-
     Vector3 calmatX;
     Vector3 calmatY;
 
@@ -68,6 +65,7 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> lastupdate;
 
     WMPDummy processingStart;
+    WMPClustering clustering;
     WMPButtonMapper buttonMapper;
     WMPSmoother smoother;
     WMPUnrotate unrotate;
@@ -140,23 +138,23 @@ public:
     }
 
     Scalar getIrSpotDistance() const {
-        return irSpotClustering.defaultDistance;
+        return clustering.irSpotClustering.defaultDistance;
     }
 
     void setIrSpotDistance(int distance) {
-        irSpotClustering.defaultDistance = distance;
+        clustering.irSpotClustering.defaultDistance = distance;
     }
 
     bool hasValidLeftRight() const {
-        return irSpotClustering.valid;
+        return clustering.irSpotClustering.valid;
     }
 
-    Vector3 getLeftPoint() const {
-        return irSpotClustering.leftPoint.undivide();
+    Vector3 getClusteringLeftPoint() const {
+        return clustering.irSpotClustering.leftPoint.undivide();
     }
 
-    Vector3 getRightPoint() const {
-        return irSpotClustering.rightPoint.undivide();
+    Vector3 getClusteringRightPoint() const {
+        return clustering.irSpotClustering.rightPoint.undivide();
     }
 
     Vector3 getFilteredLeftPoint() const {
@@ -200,7 +198,7 @@ public:
         if ((i < 0) || (i >= 4)) {
             return INVALID_IR;
         }
-        return irSpots[i];
+        return clustering.irData[i];
     }
 
     void process() {
@@ -212,27 +210,26 @@ public:
         Vector3 accelVector = Vector3(wiimote->accelX, wiimote->accelY, wiimote->accelZ);
 
         {
-            IRData r;
+            processingStart.nValidIrSpots = 0;
             for (int i = 0; i < 4; i++) {
-                r.point = Vector3(
+                Vector3f point(
                     wiimote->irdata[i].x, wiimote->irdata[i].y, 0
                 );
-                r.valid = xwii_event_ir_is_valid(
+                bool valid = xwii_event_ir_is_valid(
                     &(wiimote->irdata[i])
-                ) && (r.point.len() > 0);
-                irSpots[i] = r;
-            }
+                ) && (point.len() > 0);
 
-            irSpotClustering.processIrSpots(irSpots);
+                if (valid) {
+                    processingStart.trackingDots[processingStart.nValidIrSpots] = point;
+                    processingStart.nValidIrSpots++;
+                }
+            }
         }
 
         processingStart.deltaT = std::chrono::duration_cast<std::chrono::milliseconds>(
             now - lastupdate
         ).count();
         processingStart.accelVector = accelVector;
-        processingStart.nValidIrSpots = irSpotClustering.valid ? 2 : 0;
-        processingStart.trackingDots[0] = irSpotClustering.leftPoint;
-        processingStart.trackingDots[1] = irSpotClustering.rightPoint;
         {
             for (int bi = 0; bi < (int) WiimoteButton::COUNT; bi++) {
                 processingStart.pressedButtons[bi] = NamespacedButtonState(
@@ -288,7 +285,6 @@ public:
         mouseEnabled = true;
         lastupdate = std::chrono::steady_clock::now();
 
-        std::fill(irSpots, irSpots + 4, INVALID_IR);
         calmatX = Vector3(Scalar(-10000, 1024), 0, 10000).redivide(100);
         calmatY = Vector3(0, Scalar(10000, 1024), 0).redivide(100);
 
@@ -300,6 +296,7 @@ public:
         buttonMapper.addMapping(WiimoteButton::B, true, BTN_RIGHT);
 
         processorSequence.push_back(&processingStart);
+        processorSequence.push_back(&clustering);
         processorSequence.push_back(&buttonMapper);
         processorSequence.push_back(&unrotate);
         processorSequence.push_back(&predictiveDualIrTracking);
@@ -672,8 +669,8 @@ int main(int argc, char* argv[]) {
 
             // Send clustered left/right data
             if (wmouse.hasValidLeftRight()) {
-                const Vector3 left = wmouse.getLeftPoint();
-                const Vector3 right = wmouse.getRightPoint();
+                const Vector3 left = wmouse.getClusteringLeftPoint();
+                const Vector3 right = wmouse.getClusteringRightPoint();
                 snprintf(
                     irMessageBuffer,
                     1024,
