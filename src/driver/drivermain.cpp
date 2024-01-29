@@ -44,6 +44,7 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 #include "filterlayers/smoother.hpp"
 #include "filterlayers/unrotate.hpp"
 #include "filterlayers/predictive.hpp"
+#include "filterlayers/clustering.hpp"
 
 
 

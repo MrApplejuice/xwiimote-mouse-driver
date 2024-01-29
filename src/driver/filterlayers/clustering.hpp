@@ -14,10 +14,30 @@ You should have received a copy of the GNU General Public License along with
 Foobar. If not, see <https://www.gnu.org/licenses/>. 
 */
 
-#include "driverextra.hpp"
+#pragma once
 
-const NamespacedButtonState NamespacedButtonState :: NONE {
-    ButtonNamespace::NONE,
-    0,
-    false
+#include "base.hpp"
+
+struct IRData {
+    bool valid;
+    Vector3 point;
 };
+
+static const IRData INVALID_IR = {
+    false,
+    Vector3()
+};
+
+class IrSpotClustering {
+private:
+public:
+    bool valid;
+    Vector3 leftPoint;
+    Vector3 rightPoint;
+
+    Scalar defaultDistance;
+
+    void processIrSpots(const IRData* irSpots);
+    IrSpotClustering();
+};
+

@@ -30,6 +30,7 @@ Foobar. If not, see <https://www.gnu.org/licenses/>.
 #include "../intlinalg.hpp"
 #include "../floatlinalg.hpp"
 #include "../virtualmouse.hpp"
+#include "../driverextra.hpp"
 
 enum class ProcessingOutputHistoryPoint {
     Cluster = 0,

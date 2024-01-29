@@ -73,6 +73,8 @@ add_executable(
         src/driver/filterlayers/smoother.hpp
         src/driver/filterlayers/unrotate.hpp
         src/driver/filterlayers/predictive.hpp
+        src/driver/filterlayers/clustering.hpp
+        src/driver/filterlayers/clustering.cpp
 )
 set_target_properties(xwiimote-mouse-driver PROPERTIES CXX_STANDARD 17)
 
