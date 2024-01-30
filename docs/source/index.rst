@@ -47,9 +47,11 @@ What do you need to run the Xwiimote Mouse Driver?
 
 4. Root access to the machine you want to use the driver on (in most cases).
 
+Ready to start?
+---------------
+
 .. toctree::
   :maxdepth: 2
-  :caption: Ready to start?
 
   gettingstarted.rst
   driverconfig.rst
