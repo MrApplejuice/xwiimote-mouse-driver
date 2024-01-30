@@ -1,6 +1,6 @@
-# Wiimote-mouse
+# xwiimote-mouse-driver
 
-This project implements a userspace mouse driver for Linux (root required!).
+This project implements a userspace mouse driver for Linux (root required).
 The general design is to interface with the kernel wiimote driver using
 the library [xwiimote](https://github.com/xwiimote/xwiimote). It then does
 matches wiimote motion to screen coordinates and forwards the resulting events
@@ -9,16 +9,12 @@ create and control a virtual mouse.
 
 Special thanks to [Suricrasia Online](https://suricrasia.online/) for providing 
 this excellent blog post on how to get started with libevdev virtual mice:
+
  - https://suricrasia.online/blog/turning-a-keyboard-into/
 
-More evdev documents:
-- debug logs: https://who-t.blogspot.com/2016/09/understanding-evdev.html
-- kernel events: https://www.kernel.org/doc/html/v4.17/input/event-codes.html
-- multitouch: https://www.kernel.org/doc/html/latest/input/multi-touch-protocol.html
-- python demo project: https://github.com/alex-s-v/10moons-driver
-- Someone wrote an audio driver in C#: https://github.com/trigger-segfault/WiimoteLib.Net/tree/master
-
 # License
+
+[Full license text](LICENSE.md)
 
 xwiimote-mouse-driver is a user-space mouse driver that allows using a wiimote
 as a mouse on a desktop computer.
@@ -38,8 +34,6 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-[Full license text](LICENSE.md)
-
 # Build requirements
 
 - libevdev (version 1.12 or higher) development files 
@@ -50,3 +44,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
     - License: Custom XWiimote License  
 - cmake
 - pkgconfig
+
+# More handy documents about libevdev and the wiimote interfaces
+
+- debug logs: https://who-t.blogspot.com/2016/09/understanding-evdev.html
+- kernel events: https://www.kernel.org/doc/html/v4.17/input/event-codes.html
+- multitouch: https://www.kernel.org/doc/html/latest/input/multi-touch-protocol.html
+- python demo project: https://github.com/alex-s-v/10moons-driver
+- Someone wrote an audio driver in C#: https://github.com/trigger-segfault/WiimoteLib.Net/tree/master
