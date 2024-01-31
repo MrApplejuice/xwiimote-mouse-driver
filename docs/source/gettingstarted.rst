@@ -75,7 +75,7 @@ Run the xwiimote-mouse-driver
 Now tha the Wiimote is connected to the computer, it is time to run the 
 ``xwiimote-mouse-driver`` command:
 
-.. code-block::
+.. code-block:: text
 
     Usage: xwiimote-mouse-driver [options]
     Options:

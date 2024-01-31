@@ -17,7 +17,7 @@ The configurator utility needs access to the xwiimote-mouse-driver's socket and
 a wiimote needs to be connected to the driver for the configurator to work. The
 socket-path can configured through the commandline option ``--socket-path``:
 
-.. code-block:: 
+.. code-block:: text
 
     usage: Wiimote mouse configurator [-h] [--socket-path SOCKET_PATH]
 
@@ -72,6 +72,56 @@ pointing the wiimote at your screen. You will see:
 
 Calibration
 -----------
+
+Take your wiimote, stand or sit at the place where you intend to use it, and
+press the (1)-button on the wiimote (or click the "Start Calibration (1)"). 
+The text below the sensor preview will change to instructions text, follow 
+these instructions. The steps in detail:
+
+1. Point the wiimote at the sensor bar
+
+     - During this step, the distance to the sensor bar is measured by measuring
+       the distance between the left/right IR-spots. This is the only step in
+       the calibration where it is important to have *both* points in view.
+
+2. Point at the top-left corner of the screen
+3. Point at the top-right corner of the screen
+4. Point at the bottom-left corner of the screen
+5. Point at the bottom-right corner of the screen
+   
+    - During this step, the coordinates of the wiimote-ir data are recorded to
+      compute a `affine transformation (2d) <https://en.wikipedia.org/wiki/Affine_transformation>`_
+      between between wiimote and screen coordinates.
+
+After the last step is done, the calibration is finished. The calibration data
+will be written into the configuration file of the xwiimote-mouse-driver by
+the driver.
+
+Screen subregion
+----------------
+
+If you only want to use the wiimote on a subregion of you screen area, for 
+example, a single screen in a multi-screen setup, you will want to use the 
+screen subregion configuration as well. This configuration shows four percentage
+values in a top, left, bottom, and right position. These percentage values 
+designate a region relative to the full screen area that the wiimote 
+coordinates will be mapped to. 
+
+.. image:: _static/3-conf-subregion.jpg
+    :height: 10em
+
+Some example configurations for the top/left/bottom/right values:
+
+- You have a left and a right monitor in your setup with the same resolution.
+  You want to only use the left monitor, so the subregion should be configured
+  as: 0%/0%/100%/50%
+- You have three monitor with equal resolutions: a top-center,
+  a bottom-left, and a bottom-right monitor. You want to use the top-center
+  monitor, so the configuration should be: 0%/25%/50%/75%.
+  
+After the calibration was finished and the screen subregion was configured,
+you can test your configration by pressing the (2) button on the wiimote to
+temporarily enable the mouse.
 
 Keybindings
 -----------
