@@ -47,6 +47,7 @@ const char* VALID_OPTIONS[] = {
     "button_left_offscreen",
     "button_right_offscreen",
     "default_ir_distance",
+    "smoothing_clicked_released_delay",
     nullptr
 };
 
@@ -55,6 +56,7 @@ const char* VECTOR_OPTIONS[] = {
     "calmaty",
     "screen_top_left",
     "screen_bottom_right",
+    "smoothing_clicked_released_delay",
     nullptr
 };
 

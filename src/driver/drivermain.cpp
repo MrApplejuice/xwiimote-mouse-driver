@@ -162,6 +162,26 @@ public:
         smoother.enabled = !on;
     }
 
+    void getSmoothingFactors(
+        float& smoothingClicked, 
+        float& smoothingReleased,
+        float& clickFreeze
+    ) const {
+        smoothingClicked = smoother.positionMixFactorClicked;
+        smoothingReleased = smoother.positionMixFactor;
+        clickFreeze = smoother.clickReleaseFreezeDelay;
+    }
+
+    void setSmoothingFactors(
+        float smoothingClicked, 
+        float smoothingReleased,
+        float clickFreeze
+    ) {
+        smoother.positionMixFactorClicked = smoothingClicked;
+        smoother.positionMixFactor = smoothingReleased;
+        smoother.clickReleaseFreezeDelay = clickFreeze;
+    }
+
     Vector3 getFilteredLeftPoint() const {
         if (processingEnd.nValidIrSpots == 0) {
             return Vector3(0, 0, 0);
@@ -336,6 +356,23 @@ WiimoteButton configButtonNameToWiimote(const std::string& name) {
     return wiiButton;
 }
 
+Vector3 getConfSmootingVector(WiiMouse& wmouse) {
+    float smoothingClicked, smoothingReleased, clickFreeze;
+    wmouse.getSmoothingFactors(
+        smoothingClicked, smoothingReleased, clickFreeze
+    );
+    smoothingClicked = log10(smoothingClicked);
+    smoothingReleased = log10(smoothingReleased);
+
+    Scalar smoothingClickedS(smoothingClicked, 100);
+    Scalar smoothingReleasedS(smoothingReleased, 100);
+    Scalar clickFreezeS(clickFreeze, 100000);
+
+    return Vector3(
+        smoothingClickedS, smoothingReleasedS, clickFreezeS
+    ).redivide(100000);
+}
+
 void applyDeviceConfigurations(WiiMouse& wmouse, Config& config) {
     static bool AppliedDefaults = false;
     if (!AppliedDefaults) {
@@ -362,6 +399,11 @@ void applyDeviceConfigurations(WiiMouse& wmouse, Config& config) {
             "default_ir_distance",
             std::to_string((int64_t) (wmouse.getClusteringDefaultDistance() * 100))
         );
+
+        config.provideDefault(
+            "smoothing_clicked_released_delay",
+            vector3ToString(getConfSmootingVector(wmouse))
+        );
         AppliedDefaults = true;
     }
 
@@ -374,6 +416,13 @@ void applyDeviceConfigurations(WiiMouse& wmouse, Config& config) {
         config.vectorOptions["screen_top_left"].values[1],
         config.vectorOptions["screen_bottom_right"].values[0],
         config.vectorOptions["screen_bottom_right"].values[1]
+    );
+
+    Vector3f smoothingVector = config.vectorOptions["smoothing_clicked_released_delay"];
+    wmouse.setSmoothingFactors(
+        pow(10, smoothingVector.values[0]),
+        pow(10, smoothingVector.values[1]),
+        smoothingVector.values[2]
     );
 
     try {
@@ -687,6 +736,57 @@ int main(int argc, char* argv[]) {
                             return "ERROR:Invalid parameter count";
                         }
                         wmouse.setCalibrationMode(parameters[0] == "on");
+                    }
+                    if (command == "getsmoothing100") {
+                        Vector3 sVec = getConfSmootingVector(wmouse);
+
+                        std::stringstream ss;
+                        ss << "OK:" 
+                            << sVec.values[0].redivide(100).value
+                            << ":" << sVec.values[1].redivide(100).value
+                            << ":" << sVec.values[2].redivide(100000).value;
+                        eventResultBuffer = ss.str();
+                        return eventResultBuffer.c_str();
+                    }
+                    if (command == "setsmoothing100") {
+                        if (parameters.size() != 3) {
+                            return "ERROR:Invalid parameter count";
+                        }
+                        Scalar smoothingClicked, smoothingReleased, clickFreeze;
+                        try {
+                            smoothingClicked = Scalar(
+                                std::stoll(parameters[0]), 100
+                            );
+                            smoothingReleased = Scalar(
+                                std::stoll(parameters[1]), 100
+                            );
+                            clickFreeze = Scalar(
+                                std::stoll(parameters[2]), 100000
+                            );
+                        }
+                        catch (std::exception& e) {
+                            return "ERROR:Invalid parameter";
+                        }
+
+                        if (clickFreeze < 0) {
+                            return "ERROR:Click freeze negative";
+                        }
+                        if ((smoothingClicked > 0) || (smoothingReleased > 0)) {
+                            return "ERROR:Log smoothing factors larger than 0";
+                        }
+
+                        wmouse.setSmoothingFactors(
+                            pow(10.0f, smoothingClicked.toFloat()),
+                            pow(10.0f, smoothingReleased.toFloat()),
+                            clickFreeze.toFloat()
+                        );
+                        config.vectorOptions[
+                            "smoothing_clicked_released_delay"
+                        ] = Vector3(
+                            smoothingClicked, smoothingReleased, clickFreeze
+                        ).redivide(100000);
+                        config.writeConfigFile();
+                        return "OK";
                     }
                     return "ERROR:Invalid command";
                 }

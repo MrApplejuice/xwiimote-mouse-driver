@@ -385,11 +385,12 @@ class KeybindingsComboboxes:
             ),
         )
         combobox.bind(
-            "<Return>",            lambda event: self.__validate_match(wii_button, on_screen, combobox),
+            "<Return>",
+            lambda event: self.__validate_match(wii_button, on_screen, combobox),
         )
 
         def deferred_select_all(_):
-            combobox.after_idle(lambda : combobox.select_range(0, tk.END))
+            combobox.after_idle(lambda: combobox.select_range(0, tk.END))
 
         combobox.bind("<FocusIn>", deferred_select_all)
         combobox.bind("<Control-a>", deferred_select_all)
@@ -434,6 +435,8 @@ class KeybindingsComboboxes:
 
 class Window:
     on_screen_area_updated = None
+    on_smoothing_parameters_edited = None
+    smoothing_parameters_enabled = False
 
     screen_area_values = (0, 0, 100, 100)
 
@@ -583,6 +586,67 @@ class Window:
                 combobox = ttk.Combobox(button_assignments_grid, values=[""])
                 combobox.grid(row=i + 1, column=col, padx=3, pady=3)
                 keybindings.add_combobox(wii_btn, on_screen, combobox)
+
+        advanced_main = tk.Frame(notebook)
+        advanced_main.pack()
+        notebook.add(advanced_main, text="Advanced")
+
+        advanced_col = tk.Frame(advanced_main)
+        advanced_col.grid(row=0, column=0, sticky=tk.NW, padx=10, pady=10)
+        row_i = 0
+
+        def make_row(label, control):
+            nonlocal row_i
+
+            label = tk.Label(advanced_col, text=label)
+            label.grid(row=row_i, column=0, sticky=tk.W)
+            control.grid(row=row_i, column=1, sticky=tk.W, padx=10)
+            row_i += 1
+            return control
+
+        subcaption_font = ("Arial", 12, "italic")
+        label = tk.Label(
+            advanced_col, text="Movement smoothing", font=subcaption_font
+        )
+        label.grid(row=row_i, columnspan=2, sticky=tk.W)
+        row_i += 1
+
+        self.smoothing_pressed_var = tk.DoubleVar(value=1.0)
+        make_row(
+            "log10 pressed",
+            tk.Entry(advanced_col, textvariable=self.smoothing_pressed_var),
+        )
+
+        self.smoothing_released_var = tk.DoubleVar(value=1.0)
+        make_row(
+            "log10 released",
+            tk.Entry(advanced_col, textvariable=self.smoothing_released_var),
+        )
+
+        self.smoothing_click_freeze_var = tk.DoubleVar(value=1.0)
+        make_row(
+            "Click freeze (s)",
+            tk.Entry(advanced_col, textvariable=self.smoothing_click_freeze_var),
+        )
+
+        def smoothing_callback():
+            if (
+                self.on_smoothing_parameters_edited
+                and self.smoothing_parameters_enabled
+            ):
+                self.on_smoothing_parameters_edited(
+                    self.smoothing_pressed_var.get(),
+                    self.smoothing_released_var.get(),
+                    self.smoothing_click_freeze_var.get(),
+                )
+
+        for v in [
+            self.smoothing_released_var,
+            self.smoothing_pressed_var,
+            self.smoothing_click_freeze_var,
+        ]:
+            v.trace_add("write", lambda *args: smoothing_callback())
+
 
 class Logic:
     def __init__(self, win: Window, wiimote: WiimoteSocketReader):
@@ -785,6 +849,20 @@ def query_keybindings(window: Window, wiimote: WiimoteSocketReader):
     query_keys(wiimote)
 
 
+def query_smoothing_factors(window: Window, wiimote: WiimoteSocketReader):
+    def received(reps, args):
+        if reps != "OK":
+            print("ERROR getting smoothing factors: ", args)
+            return
+
+        window.smoothing_pressed_var.set(int(args[0]) / 100)
+        window.smoothing_released_var.set(int(args[1]) / 100)
+        window.smoothing_click_freeze_var.set(int(args[2]) / 100000)
+        window.smoothing_parameters_enabled = True
+
+    wiimote.send_message("getsmoothing100", callback=received)
+
+
 FREE_SORFTWARE_COPTYRIGHT_NOTICE = """
 Copyright (C) 2024  Paul Konstantin Gerke
 
@@ -844,7 +922,9 @@ def main():
 
     wiimote = WiimoteSocketReader(args.socket_path, root, new_socket_data)
     wiimote.send_message("mouse", "off")
+
     query_keybindings(window, wiimote)
+    query_smoothing_factors(window, wiimote)
 
     def assign_screenarea(cmd, topLeftBottomRight100):
         if cmd == "ERROR":
@@ -942,6 +1022,16 @@ def main():
 
     window.btn_enable_mouse.config(command=toggle_mouse_activated)
     idle_logic.on_toggle_mouse = toggle_mouse_activated
+
+    def on_smoothing_parameters_edited(pressed, released, click_freeze):
+        wiimote.send_message(
+            "setsmoothing100",
+            int(pressed * 100),
+            int(released * 100),
+            int(click_freeze * 100000),
+        )
+
+    window.on_smoothing_parameters_edited = on_smoothing_parameters_edited
 
     try:
         root.mainloop()
