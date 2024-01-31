@@ -39,8 +39,8 @@ WIIMOTE_BUTTON_READABLE_NAMES = OrderedDict(
         ("+", "Plus"),
         ("-", "Minus"),
         ("h", "Home"),
-        ("1", "One"),
-        ("2", "Two"),
+        ("1", "1"),
+        ("2", "2"),
         ("u", "Up"),
         ("d", "Down"),
         ("l", "Left"),
@@ -653,6 +653,7 @@ class CalibrationLogic(Logic):
     ]
 
     def start(self):
+        self.error_start_time = None
         self.step_data = []
         self.win.btn_start_calibration.config(
             highlightthickness=5,
@@ -664,17 +665,28 @@ class CalibrationLogic(Logic):
         self.win.btn_start_calibration.pack(side=tk.TOP, fill=tk.X, pady=5, padx=0)
 
     def on_wii_button_pressed(self, button_name: str):
-        if self.wiimote.lr_vectors is None:
-            return
-
-        if button_name == "a":
-            self.step_data.append(self.wiimote.lr_vectors)
         if button_name == "1":
             if self.on_exit:
                 self.on_exit()
 
+        if self.wiimote.lr_vectors is None:
+            msg = (
+                "ERROR: Sensor bar not visible! Make sure that the sensor "
+                "bar is turned on and in view of the wiimote."
+            )
+            self.error_start_time = time.time()
+            self.win.text_box.config(text=msg)
+            return
+
+        if button_name == "a":
+            self.step_data.append(self.wiimote.lr_vectors)
+
     def process_socket_data(self):
-        self.win.text_box.config(text=self.STEPS[len(self.step_data)])
+        if self.error_start_time is not None:
+            if time.time() - self.error_start_time > 5:
+                self.error_start_time = None
+        else:
+            self.win.text_box.config(text=self.STEPS[len(self.step_data)])
         if len(self.step_data) == len(self.STEPS) - 1:
             if self.on_completed:
                 self.on_completed()
