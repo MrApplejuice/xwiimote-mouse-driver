@@ -385,10 +385,14 @@ class KeybindingsComboboxes:
             ),
         )
         combobox.bind(
-            "<Return>",
-            lambda event: self.__validate_match(wii_button, on_screen, combobox),
+            "<Return>",            lambda event: self.__validate_match(wii_button, on_screen, combobox),
         )
-        combobox.bind("<FocusIn>", lambda event: combobox.selection_range(0, "end"))
+
+        def deferred_select_all(_):
+            combobox.after_idle(lambda : combobox.select_range(0, tk.END))
+
+        combobox.bind("<FocusIn>", deferred_select_all)
+        combobox.bind("<Control-a>", deferred_select_all)
 
         if on_screen:
             self.on_screen_boxes[wii_button] = combobox
@@ -580,7 +584,6 @@ class Window:
                 combobox.grid(row=i + 1, column=col, padx=3, pady=3)
                 keybindings.add_combobox(wii_btn, on_screen, combobox)
 
-
 class Logic:
     def __init__(self, win: Window, wiimote: WiimoteSocketReader):
         self.win = win
@@ -709,63 +712,7 @@ class CalibrationLogic(Logic):
         self.win.btn_start_calibration.pack(side=tk.TOP, fill=tk.X, pady=5, padx=0)
 
 
-FREE_SORFTWARE_COPTYRIGHT_NOTICE = """
-Copyright (C) 2024  Paul Konstantin Gerke
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-""".lstrip()
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        prog="Wiimote mouse configurator",
-        description="Configuration tool for the xwiimote-mouse-driver",
-    )
-
-    parser.add_argument(
-        "--socket-path",
-        type=str,
-        default="wiimote-mouse.sock",
-        help="Path to the socket to use for communication with the driver",
-    )
-
-    args = parser.parse_args()
-
-    print(FREE_SORFTWARE_COPTYRIGHT_NOTICE)
-
-    root = tk.Tk()
-    root.title("Wiimote mouse configurator")
-    root.resizable(False, False)
-
-    current_logic = None
-
-    window = Window(root)
-    root.geometry("600x400")
-
-    last_pressed_buttons = []
-
-    def new_socket_data():
-        nonlocal current_logic, last_pressed_buttons
-
-        current_logic.process_socket_data()
-
-        if current_logic:
-            for b_name in wiimote.pressed_buttons:
-                if b_name not in last_pressed_buttons:
-                    current_logic.on_wii_button_pressed(b_name)
-        last_pressed_buttons = tuple(wiimote.pressed_buttons)
-
+def query_keybindings(window: Window, wiimote: WiimoteSocketReader):
     def query_keymap():
         def received(reps, args):
             if reps != "OK":
@@ -835,9 +782,69 @@ def main():
 
         wiimote.send_message("keycount", callback=count_received)
 
+    query_keys(wiimote)
+
+
+FREE_SORFTWARE_COPTYRIGHT_NOTICE = """
+Copyright (C) 2024  Paul Konstantin Gerke
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+""".lstrip()
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="Wiimote mouse configurator",
+        description="Configuration tool for the xwiimote-mouse-driver",
+    )
+
+    parser.add_argument(
+        "--socket-path",
+        type=str,
+        default="wiimote-mouse.sock",
+        help="Path to the socket to use for communication with the driver",
+    )
+
+    args = parser.parse_args()
+
+    print(FREE_SORFTWARE_COPTYRIGHT_NOTICE)
+
+    root = tk.Tk()
+    root.title("Wiimote mouse configurator")
+    root.resizable(False, False)
+
+    current_logic = None
+
+    window = Window(root)
+    root.geometry("600x400")
+
+    last_pressed_buttons = []
+
+    def new_socket_data():
+        nonlocal current_logic, last_pressed_buttons
+
+        current_logic.process_socket_data()
+
+        if current_logic:
+            for b_name in wiimote.pressed_buttons:
+                if b_name not in last_pressed_buttons:
+                    current_logic.on_wii_button_pressed(b_name)
+        last_pressed_buttons = tuple(wiimote.pressed_buttons)
+
     wiimote = WiimoteSocketReader(args.socket_path, root, new_socket_data)
     wiimote.send_message("mouse", "off")
-    query_keys(wiimote)
+    query_keybindings(window, wiimote)
 
     def assign_screenarea(cmd, topLeftBottomRight100):
         if cmd == "ERROR":
