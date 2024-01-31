@@ -31,6 +31,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Where am I?
+        run: find
       - name: Build sphinx
         run: cd docs/build && pipenv install --skip-lock && pipenv run make html
       - name: Setup Pages
