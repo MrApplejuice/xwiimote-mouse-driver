@@ -32,9 +32,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: pip-install pipenv
-        run: pip install pipenv
+        run: pip install sphinx==7.2 sphinx-rtd-theme==2.0
       - name: Build sphinx
-        run: cd docs && pipenv install --skip-lock && pipenv run make html
+        run: cd docs && make html
       - name: Setup Pages
         uses: actions/configure-pages@v4
       - name: Upload artifact
