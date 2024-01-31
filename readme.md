@@ -10,7 +10,11 @@ create and control a virtual mouse.
 Special thanks to [Suricrasia Online](https://suricrasia.online/) for providing 
 this excellent blog post on how to get started with libevdev virtual mice:
 
- - https://suricrasia.online/blog/turning-a-keyboard-into/
+- https://suricrasia.online/blog/turning-a-keyboard-into/
+
+# Documentation
+
+The documentation can be found at https://mrapplejuice.github.io/xwiimote-mouse-driver/#
 
 # License
 
@@ -37,11 +41,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # Build requirements
 
 - libevdev (version 1.12 or higher) development files 
+
     - See https://www.freedesktop.org/wiki/Software/libevdev/
     - License: MIT
+
 - libxwiimote development files
+
     - See https://github.com/xwiimote/xwiimote
     - License: Custom XWiimote License  
+
 - cmake
 - pkgconfig
 

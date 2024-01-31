@@ -30,6 +30,7 @@ import lzma
 import base64
 import struct
 import time
+import webbrowser
 
 
 WIIMOTE_BUTTON_READABLE_NAMES = OrderedDict(
@@ -497,6 +498,7 @@ class Window:
 
         button3 = tk.Button(button_frame, text="Help")
         button3.pack(side=tk.TOP, fill=tk.X, pady=5, padx=0)
+        self.btn_help = button3
 
         # Screen subregion controls
         self.screen_area_box = screen_area_box = tk.Frame(calibration_frame)
@@ -909,6 +911,12 @@ def main():
 
     window.btn_start_calibration.config(command=on_start_calibration)
     idle_logic.on_start_calibration = on_start_calibration
+
+    def open_help_website():
+        website = "https://mrapplejuice.github.io/xwiimote-mouse-driver/#"
+        webbrowser.open(website)
+
+    window.btn_help.config(command=open_help_website)
 
     def on_screen_area_updated(values):
         wiimote.send_message("screenarea100", *[v * 10000 for v in values])
