@@ -71,8 +71,10 @@ add_executable(
         src/driver/filterlayers/base.hpp
         src/driver/filterlayers/buttons.hpp
         src/driver/filterlayers/smoother.hpp
+        src/driver/filterlayers/smoother.cpp
         src/driver/filterlayers/unrotate.hpp
         src/driver/filterlayers/predictive.hpp
+        src/driver/filterlayers/predictive.cpp
         src/driver/filterlayers/clustering.hpp
         src/driver/filterlayers/clustering.cpp
 )
