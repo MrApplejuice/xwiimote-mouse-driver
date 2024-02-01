@@ -45,7 +45,7 @@ xwiimote-mouse-driver. If not, see <https://www.gnu.org/licenses/>.
 #include "filterlayers/unrotate.hpp"
 #include "filterlayers/predictive.hpp"
 #include "filterlayers/clustering.hpp"
-
+#include "filterlayers/towedcircle.hpp"
 
 
 class WiiMouse {
@@ -70,6 +70,7 @@ private:
     WMPSmoother smoother;
     WMPUnrotate unrotate;
     WMPPredictiveDualIrTracking predictiveDualIrTracking;
+    WMPTowedCircle towedCircle;
     WMPDummy processingEnd;
 
     std::vector<WiiMouseProcessingModule*> processorSequence;
@@ -326,6 +327,7 @@ public:
         processorSequence.push_back(&unrotate);
         processorSequence.push_back(&predictiveDualIrTracking);
         processorSequence.push_back(&smoother);
+        processorSequence.push_back(&towedCircle);
         processorSequence.push_back(&processingEnd);
     }
 };

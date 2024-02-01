@@ -18,10 +18,8 @@ xwiimote-mouse-driver. If not, see <https://www.gnu.org/licenses/>.
 
 static float logNormal2d(const Vector3f& point, const Vector3f& pointStd) {
     const float sqrt2pi = 2.5066282746310002f;
-
     const float x = point[0] / pointStd[0];
     const float y = point[1] / pointStd[1];
-
     return (-0.5f * (x * x + y * y)) - (sqrt2pi + pointStd[0] + pointStd[1]);
 }
 

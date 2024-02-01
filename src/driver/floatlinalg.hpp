@@ -38,6 +38,13 @@ struct Vector3f {
         );
     }
 
+    Vector3f& operator+=(const Vector3f& other) {
+        values[0] += other.values[0];
+        values[1] += other.values[1];
+        values[2] += other.values[2];
+        return *this;
+    }
+
     Vector3f operator-(const Vector3f& other) const {
         return Vector3f(
             values[0] - other.values[0],
@@ -60,6 +67,13 @@ struct Vector3f {
             values[1] / scalar,
             values[2] / scalar
         );
+    }
+
+    Vector3f& operator/=(float scalar) {
+        values[0] /= scalar;
+        values[1] /= scalar;
+        values[2] /= scalar;
+        return *this;
     }
 
     float& operator[](int index) {

@@ -77,6 +77,8 @@ add_executable(
         src/driver/filterlayers/predictive.cpp
         src/driver/filterlayers/clustering.hpp
         src/driver/filterlayers/clustering.cpp
+        src/driver/filterlayers/towedcircle.hpp
+        src/driver/filterlayers/towedcircle.cpp
 )
 set_target_properties(xwiimote-mouse-driver PROPERTIES CXX_STANDARD 17)
 
