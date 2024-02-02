@@ -183,31 +183,22 @@ public:
         smoother.clickReleaseFreezeDelay = clickFreeze;
     }
 
-    Vector3 getFilteredLeftPoint() const {
+    void getFilteredLrPoints(Vector3f& l, Vector3f& r) const {
         const WiiMouseProcessingModule* mod = nullptr;
         try {
             mod = processingEnd.history.at(ProcessingOutputHistoryPoint::LastLeftRight);
         }
         catch (std::out_of_range& e) {}
         if (!mod || !mod->nValidIrSpots) {
-            return Vector3(0, 0, 0);
+            l = r = Vector3f(0, 0, 0);
+            return;
         }
-        return processingEnd.trackingDots[0].toVector3(1);
-    }
-
-    Vector3 getFilteredRightPoint() const {
-        const WiiMouseProcessingModule* mod = nullptr;
-        try {
-            mod = processingEnd.history.at(ProcessingOutputHistoryPoint::LastLeftRight);
+        if (mod->nValidIrSpots >= 1) {
+            l = r = processingEnd.trackingDots[0];
         }
-        catch (std::out_of_range& e) {}
-        if (!mod || !mod->nValidIrSpots) {
-            return Vector3(0, 0, 0);
+        if (mod->nValidIrSpots >= 2) {
+            r = processingEnd.trackingDots[1];
         }
-        if (mod->nValidIrSpots == 1) {
-            return processingEnd.trackingDots[0].toVector3(1);
-        }
-        return processingEnd.trackingDots[1].toVector3(1);
     }
 
     std::map<WiimoteButtonMappingState, std::string> getButtonMap() const {
@@ -821,31 +812,35 @@ int main(int argc, char* argv[]) {
 
             // Send clustered left/right data
             if (wmouse.hasValidLeftRight()) {
-                const Vector3 left = wmouse.getClusteringLeftPoint();
-                const Vector3 right = wmouse.getClusteringRightPoint();
-                snprintf(
-                    irMessageBuffer,
-                    1024,
-                    "lr:%i:%i:%i:%i\n",
-                    (int) left.values[0].value,
-                    (int) left.values[1].value,
-                    (int) right.values[0].value,
-                    (int) right.values[1].value
-                );
-                csocket.broadcastMessage(irMessageBuffer);
+                {
+                    const Vector3 left = wmouse.getClusteringLeftPoint();
+                    const Vector3 right = wmouse.getClusteringRightPoint();
+                    snprintf(
+                        irMessageBuffer,
+                        1024,
+                        "lr:%i:%i:%i:%i\n",
+                        (int) left.values[0].value,
+                        (int) left.values[1].value,
+                        (int) right.values[0].value,
+                        (int) right.values[1].value
+                    );
+                    csocket.broadcastMessage(irMessageBuffer);
+                }
 
-                const Vector3 fleft = wmouse.getFilteredLeftPoint();
-                const Vector3 fright = wmouse.getFilteredRightPoint();
-                snprintf(
-                    irMessageBuffer,
-                    1024,
-                    "flr:%i:%i:%i:%i\n",
-                    (int) fleft.values[0].value,
-                    (int) fleft.values[1].value,
-                    (int) fright.values[0].value,
-                    (int) fright.values[1].value
-                );
-                csocket.broadcastMessage(irMessageBuffer);
+                {
+                    Vector3f fleft, fright;
+                    wmouse.getFilteredLrPoints(fleft, fright);
+                    snprintf(
+                        irMessageBuffer,
+                        1024,
+                        "flr:%i:%i:%i:%i\n",
+                        (int) fleft.values[0],
+                        (int) fleft.values[1],
+                        (int) fright.values[0],
+                        (int) fright.values[1]
+                    );
+                    csocket.broadcastMessage(irMessageBuffer);
+                }
             } else {
                 csocket.broadcastMessage("lr:invalid\n");
                 csocket.broadcastMessage("flr:invalid\n");
