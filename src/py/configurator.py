@@ -605,10 +605,8 @@ class Window:
             return control
 
         subcaption_font = ("Arial", 12, "italic")
-        label = tk.Label(
-            advanced_col, text="Movement smoothing", font=subcaption_font
-        )
-        label.grid(row=row_i, columnspan=2, sticky=tk.W)
+        label = tk.Label(advanced_col, text="Movement smoothing", font=subcaption_font)
+        label.grid(row=row_i, columnspan=2, sticky=tk.W, pady=10)
         row_i += 1
 
         self.smoothing_pressed_var = tk.DoubleVar(value=1.0)
@@ -646,6 +644,16 @@ class Window:
             self.smoothing_click_freeze_var,
         ]:
             v.trace_add("write", lambda *args: smoothing_callback())
+
+        label = tk.Label(advanced_col, text="Towed Circle", font=subcaption_font)
+        label.grid(row=row_i, columnspan=2, sticky=tk.W, pady=10)
+        row_i += 1
+
+        self.towed_circle_radius_var = tk.DoubleVar(value=0.0)
+        make_row(
+            "Radius",
+            tk.Entry(advanced_col, textvariable=self.towed_circle_radius_var),
+        )
 
 
 class Logic:
@@ -863,6 +871,24 @@ def query_smoothing_factors(window: Window, wiimote: WiimoteSocketReader):
     wiimote.send_message("getsmoothing100", callback=received)
 
 
+def query_towed_circle_radius(window: Window, wiimote: WiimoteSocketReader):
+    def received(reps, args):
+        if reps != "OK":
+            print("ERROR getting towed circle radius: ", args)
+            return
+
+        window.towed_circle_radius_var.set(int(args[0]) / 10000)
+
+        def update_value():
+            wiimote.send_message(
+                "settcradius10000", int(window.towed_circle_radius_var.get() * 10000)
+            )
+
+        window.towed_circle_radius_var.trace_add("write", lambda *args: update_value())
+
+    wiimote.send_message("gettcradius10000", callback=received)
+
+
 FREE_SORFTWARE_COPTYRIGHT_NOTICE = """
 Copyright (C) 2024  Paul Konstantin Gerke
 
@@ -925,6 +951,7 @@ def main():
 
     query_keybindings(window, wiimote)
     query_smoothing_factors(window, wiimote)
+    query_towed_circle_radius(window, wiimote)
 
     def assign_screenarea(cmd, topLeftBottomRight100):
         if cmd == "ERROR":

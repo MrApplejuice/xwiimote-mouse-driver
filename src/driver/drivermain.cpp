@@ -228,6 +228,14 @@ public:
         return clustering.irData[i];
     }
 
+    float getToweredCircleRadius() const {
+        return towedCircle.radius;
+    }
+
+    void setToweredCircleRadius(float radius) {
+        towedCircle.radius = radius;
+    }
+
     void process() {
         std::chrono::time_point<std::chrono::steady_clock> now = 
             std::chrono::steady_clock::now();
@@ -407,6 +415,11 @@ void applyDeviceConfigurations(WiiMouse& wmouse, Config& config) {
             "smoothing_clicked_released_delay",
             vector3ToString(getConfSmootingVector(wmouse))
         );
+
+        config.provideDefault(
+            "towed_circle_radius",
+            std::to_string((int64_t) (wmouse.getToweredCircleRadius() * 10000))
+        );
         AppliedDefaults = true;
     }
 
@@ -429,10 +442,21 @@ void applyDeviceConfigurations(WiiMouse& wmouse, Config& config) {
     );
 
     try {
+        wmouse.setToweredCircleRadius(
+            clamp(std::stoll(config.stringOptions["towed_circle_radius"]), 0L, 10000L) / 10000.0f
+        );
+    }
+    catch (std::exception& e) {
+        std::cerr << "Invalid option for towed_circle_radius" << std::endl;
+    }
+
+    try {
         int64_t defaultIrDistance = std::stoll(config.stringOptions["default_ir_distance"]);
         wmouse.setClusteringDefaultDistance(defaultIrDistance / 100.0f);
     }
-    catch (std::exception& e) {}
+    catch (std::exception& e) {
+        std::cerr << "Invalid option for default_ir_distance" << std::endl;
+    }
 
     wmouse.clearButtonMap();
     static const std::vector<std::string> ONOFFSCREEN_SUFFIXES = {
@@ -788,6 +812,34 @@ int main(int argc, char* argv[]) {
                         ] = Vector3(
                             smoothingClicked, smoothingReleased, clickFreeze
                         ).redivide(100000);
+                        config.writeConfigFile();
+                        return "OK";
+                    }
+                    if (command == "gettcradius10000") {
+                        std::stringstream ss;
+                        ss << "OK:" << (int) (wmouse.getToweredCircleRadius() * 10000);
+                        eventResultBuffer = ss.str();
+                        return eventResultBuffer.c_str();
+                    }
+                    if (command == "settcradius10000") {
+                        if (parameters.size() != 1) {
+                            return "ERROR:Invalid parameter count";
+                        }
+                        int64_t radius;
+                        try {
+                            radius = std::stoll(parameters[0]);
+                        }
+                        catch (std::exception& e) {
+                            return "ERROR:Invalid parameter";
+                        }
+                        if (radius < 0) {
+                            return "ERROR:Invalid parameter";
+                        }
+                        if (radius > 10000) {
+                            radius = 10000;
+                        }
+                        wmouse.setToweredCircleRadius(radius / 10000.0f);
+                        config.stringOptions["towed_circle_radius"] = std::to_string(radius);
                         config.writeConfigFile();
                         return "OK";
                     }

@@ -48,6 +48,7 @@ const char* VALID_OPTIONS[] = {
     "button_right_offscreen",
     "default_ir_distance",
     "smoothing_clicked_released_delay",
+    "towed_circle_radius",
     nullptr
 };
 

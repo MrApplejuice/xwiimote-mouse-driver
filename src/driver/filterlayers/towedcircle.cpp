@@ -20,7 +20,7 @@ void WMPTowedCircle :: process(const WiiMouseProcessingModule& prev) {
     copyFromPrev(prev);
     history[ProcessingOutputHistoryPoint::LastLeftRight] = &prev;
 
-    if (nValidIrSpots <= 0) {
+    if ((nValidIrSpots <= 0) || (radius <= 0)) {
         validCircle = false;
         return;
     }
