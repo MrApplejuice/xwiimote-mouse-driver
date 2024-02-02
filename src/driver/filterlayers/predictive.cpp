@@ -26,7 +26,7 @@ static float logNormal2d(const Vector3f& point, const Vector3f& pointStd) {
 void WMPPredictiveDualIrTracking :: process(const WiiMouseProcessingModule& prev) {
     copyFromPrev(prev);
 
-    WiiMouseProcessingModule& irData = *history[ProcessingOutputHistoryPoint::Cluster];
+    const WiiMouseProcessingModule& irData = *history[ProcessingOutputHistoryPoint::Cluster];
     int clusterNValidIrSpots = irData.nValidIrSpots;
     if (clusterNValidIrSpots == 2) {
         if (irData.trackingDots[0] == irData.trackingDots[1]) {

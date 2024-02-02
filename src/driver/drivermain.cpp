@@ -184,18 +184,28 @@ public:
     }
 
     Vector3 getFilteredLeftPoint() const {
-        if (processingEnd.nValidIrSpots == 0) {
+        const WiiMouseProcessingModule* mod = nullptr;
+        try {
+            mod = processingEnd.history.at(ProcessingOutputHistoryPoint::LastLeftRight);
+        }
+        catch (std::out_of_range& e) {}
+        if (!mod || !mod->nValidIrSpots) {
             return Vector3(0, 0, 0);
         }
         return processingEnd.trackingDots[0].toVector3(1);
     }
 
     Vector3 getFilteredRightPoint() const {
-        if (processingEnd.nValidIrSpots == 0) {
+        const WiiMouseProcessingModule* mod = nullptr;
+        try {
+            mod = processingEnd.history.at(ProcessingOutputHistoryPoint::LastLeftRight);
+        }
+        catch (std::out_of_range& e) {}
+        if (!mod || !mod->nValidIrSpots) {
             return Vector3(0, 0, 0);
         }
-        if (processingEnd.nValidIrSpots == 1) {
-            return getFilteredLeftPoint();
+        if (mod->nValidIrSpots == 1) {
+            return processingEnd.trackingDots[0].toVector3(1);
         }
         return processingEnd.trackingDots[1].toVector3(1);
     }

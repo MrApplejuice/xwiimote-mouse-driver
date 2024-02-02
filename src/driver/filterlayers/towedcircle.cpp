@@ -18,6 +18,7 @@ xwiimote-mouse-driver. If not, see <https://www.gnu.org/licenses/>.
 
 void WMPTowedCircle :: process(const WiiMouseProcessingModule& prev) {
     copyFromPrev(prev);
+    history[ProcessingOutputHistoryPoint::LastLeftRight] = &prev;
 
     if (nValidIrSpots <= 0) {
         validCircle = false;

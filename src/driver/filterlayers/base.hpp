@@ -34,6 +34,7 @@ xwiimote-mouse-driver. If not, see <https://www.gnu.org/licenses/>.
 
 enum class ProcessingOutputHistoryPoint {
     Cluster = 0,
+    LastLeftRight,
 };
 
 class WiiMouseProcessingModule {
@@ -59,7 +60,7 @@ protected:
 public:
     int deltaT; // milli seconds
 
-    std::map<ProcessingOutputHistoryPoint, WiiMouseProcessingModule*> history;
+    std::map<ProcessingOutputHistoryPoint, const WiiMouseProcessingModule*> history;
 
     NamespacedButtonState pressedButtons[MAX_BUTTONS];
 
