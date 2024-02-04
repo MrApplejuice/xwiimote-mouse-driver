@@ -125,3 +125,18 @@ temporarily enable the mouse.
 
 Keybindings
 -----------
+
+On the keybindings-tab you can assign button maps for each wiimote button for
+different situations.
+
+.. image:: _static/3-conf-keybindings.png
+    :height: 20em
+
+The left column, "On Screen", defines the keybindings that will be used when a
+valid ir signal is detected by the wiimote. The wiimote is "on screen". The
+right column defines the keys that are in use when no valid ir signal is
+detected by the wiimote. The wiimote is "off screen".
+
+The two bindings allow for contextual rebinding of the wiimote buttons, 
+for example, if the wiimote is held sideways. In you do not want to use this 
+feature, just bind the same buttons for on screen and off screen.
